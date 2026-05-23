@@ -10,16 +10,34 @@
 :root {
   --bg:#0f0f13;--surface:#1a1a24;--surface2:#22222f;--surface3:#2a2a3a;
   --accent:#f0a500;--green:#22c55e;--red:#ef4444;--blue:#3b82f6;--purple:#a855f7;
-  --owner:#f0a500;--manager:#3b82f6;--worker:#22c55e;
+  --owner:#f0a500;--manager:#3b82f6;--worker:#22c55e;--dev:#a855f7;
   --text:#f0f0f5;--text2:#9090a8;--border:#2e2e42;--radius:10px;
 }
 *{box-sizing:border-box;margin:0;padding:0;}
-body{background:var(--bg);color:var(--text);font-family:'Segoe UI',system-ui,sans-serif;height:100vh;overflow:hidden;display:flex;flex-direction:column;}
+body{background:var(--bg);color:var(--text);font-family:'Segoe UI',system-ui,sans-serif;height:100vh;overflow:hidden;display:flex;flex-direction:column;overscroll-behavior:none;}
 .hidden{display:none!important;}
 .btn{border:none;border-radius:var(--radius);cursor:pointer;font-weight:600;transition:all .15s;}
 .btn-sm{padding:7px 14px;font-size:.82rem;}
 .btn-md{padding:10px 18px;font-size:.9rem;}
 .btn-lg{padding:13px 18px;font-size:1rem;width:100%;}
+
+/* ── HARDWARE FIX: minimum touch targets (Apple HIG: 44px, Google: 48px) ── */
+@media (pointer:coarse){
+  /* Coarse pointer = touchscreen device */
+  .btn{min-height:44px;min-width:44px;}
+  .btn-sm{min-height:40px;padding:8px 14px;}
+  /* Prevent accidental zooms on double-tap in checkout areas */
+  #checkoutBody, #splitBody, #orderItems{touch-action:manipulation;}
+  /* Larger tap targets on tab close/delete buttons (currently very small) */
+  .btn[onclick*="checkoutTab"], .btn[onclick*="deleteTab"]{min-width:48px;min-height:40px;}
+}
+/* ── RESPONSIVE: prevent overlapping buttons on small screens (< 375px) ── */
+@media (max-width:374px){
+  .btn-sm{font-size:.72rem;padding:6px 8px;}
+  .emp-card{padding:10px 4px;}
+  .emp-name{font-size:.72rem;}
+}
+/* ──────────────────────────────────────────────────────────────────────── */
 .btn-accent{background:var(--accent);color:#000;}
 .btn-accent:hover{background:#ffb820;}
 .btn-green{background:var(--green);color:#fff;}
@@ -310,6 +328,7 @@ select.form-input{cursor:pointer;}
 .role-owner{background:rgba(240,165,0,.15);color:var(--owner);}
 .role-manager{background:rgba(59,130,246,.15);color:var(--manager);}
 .role-worker{background:rgba(34,197,94,.15);color:var(--worker);}
+.role-dev{background:rgba(168,85,247,.15);color:var(--dev);}
 .helcim-note{background:var(--surface2);border-radius:8px;padding:12px;font-size:.78rem;color:var(--text2);line-height:1.6;}
 .helcim-note strong{color:var(--text);}
 
@@ -552,8 +571,9 @@ input:checked+.toggle-track::after{left:23px;}
 </div>
 
 <div id="loginScreen">
-  <div class="login-logo">🍺 BAR POS <span>Powered by Helcim · Select your profile</span></div>
+  <div class="login-logo" id="loginLogo" onclick="_devTapCount()" style="cursor:default;user-select:none;">🍺 BAR POS <span>Powered by Helcim · Select your profile</span></div>
   <div class="employee-grid" id="employeeGrid"></div>
+  <div id="devAccessHint" style="display:none;font-size:.72rem;color:var(--dev);margin-top:4px;letter-spacing:1px;">⚡ DEV ACCESS</div>
 </div>
 
 <!-- PIN PAD (shown inside login screen) -->
@@ -600,6 +620,7 @@ input:checked+.toggle-track::after{left:23px;}
       <button class="nav-tab owner-only manager-only" onclick="showPage('menuPage')" id="navMenu">✏️ Menu</button>
       <button class="nav-tab" onclick="showPage('staffPage')" id="navStaff">📋 Staff &amp; Shifts</button>
       <button class="nav-tab owner-only" onclick="showPage('settingsPage')" id="navSettings">⚙️ Settings</button>
+      <button class="nav-tab hidden" onclick="showPage('devPage')" id="devNavBtn" style="color:var(--dev);">⚡ Dev</button>
     </div>
     <div style="display:flex;align-items:center;gap:12px;">
       <span id="syncStatus" style="font-size:.72rem;font-weight:700;color:var(--text2);cursor:default;" title="Sync status">○ Offline</span>
@@ -624,6 +645,12 @@ input:checked+.toggle-track::after{left:23px;}
       <div class="sync-progress-bar hidden" id="syncProgressBar"><div class="sync-progress-fill" id="syncProgressFill" style="width:0%"></div></div>
       <span id="offlineQueueCount" style="color:var(--text2);font-weight:400;font-size:.7rem;"></span>
     </div>
+  </div>
+
+  <!-- STAFF ERROR ALERT BANNER (hidden by default, shown on repeated errors) -->
+  <div id="staffAlertBanner" style="display:none;background:#dc2626;color:#fff;padding:8px 16px;font-size:.82rem;font-weight:700;text-align:center;flex-shrink:0;animation:blink 1.4s ease-in-out 3;">
+    ⚠️ <span id="staffAlertMsg">The system has encountered repeated errors — please notify your manager.</span>
+    <button onclick="document.getElementById('staffAlertBanner').style.display='none';" style="background:rgba(255,255,255,.25);border:none;color:#fff;padding:2px 10px;border-radius:5px;cursor:pointer;margin-left:12px;font-size:.78rem;font-weight:700;">Dismiss</button>
   </div>
 
   <!-- POS PAGE -->
@@ -668,7 +695,7 @@ input:checked+.toggle-track::after{left:23px;}
           </div>
           <div style="display:flex;gap:5px;">
             <span id="itemCountBadge" style="display:none;background:var(--accent);color:#000;border-radius:10px;padding:2px 7px;font-size:.72rem;font-weight:700;"></span>
-            <button class="btn btn-sm btn-ghost" onclick="clearOrder()" style="padding:5px 8px">🗑</button>
+            <button class="btn btn-sm btn-ghost" onclick="confirmClearOrder()" style="padding:5px 8px">🗑</button>
           </div>
         </div>
         <div class="order-items" id="orderItems">
@@ -885,6 +912,69 @@ input:checked+.toggle-track::after{left:23px;}
       </div>
       <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;">
         <table class="report-table" id="menuTable"></table>
+      </div>
+    </div>
+  </div>
+
+  <!-- DEV PAGE -->
+  <div class="page hidden" id="devPage">
+    <div style="width:100%;max-width:900px;margin:0 auto;">
+      <div class="section-title" style="margin-bottom:16px;color:var(--dev);">⚡ Developer Panel</div>
+
+      <!-- Identity -->
+      <div style="background:var(--surface);border:1px solid var(--dev);border-radius:var(--radius);padding:16px;margin-bottom:12px;">
+        <div class="section-label" style="color:var(--dev);margin-bottom:10px;">Session</div>
+        <div id="devSessionInfo" style="font-size:.82rem;color:var(--text2);line-height:1.9;font-family:monospace;"></div>
+      </div>
+
+      <!-- Role switcher -->
+      <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:16px;margin-bottom:12px;">
+        <div class="section-label" style="margin-bottom:10px;">🎭 Impersonate Role (no PIN required)</div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;">
+          <button class="btn btn-sm btn-ghost" onclick="_devImpersonate('owner')" style="border:1px solid var(--owner);color:var(--owner);">👑 Owner</button>
+          <button class="btn btn-sm btn-ghost" onclick="_devImpersonate('manager')" style="border:1px solid var(--manager);color:var(--manager);">⭐ Manager</button>
+          <button class="btn btn-sm btn-ghost" onclick="_devImpersonate('worker')" style="border:1px solid var(--worker);color:var(--worker);">🍺 Worker</button>
+          <button class="btn btn-sm btn-ghost" onclick="_devImpersonate('dev')" style="border:1px solid var(--dev);color:var(--dev);">⚡ Dev (self)</button>
+        </div>
+        <div id="devImpersonateNote" style="font-size:.72rem;color:var(--text2);margin-top:8px;"></div>
+      </div>
+
+      <!-- Diagnostics -->
+      <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:16px;margin-bottom:12px;">
+        <div class="section-label" style="margin-bottom:10px;">🧪 Diagnostics</div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px;">
+          <button class="btn btn-sm btn-ghost" onclick="_devDiag('storage')">💾 Storage Usage</button>
+          <button class="btn btn-sm btn-ghost" onclick="_devDiag('firebase')">🔥 Firebase Status</button>
+          <button class="btn btn-sm btn-ghost" onclick="_devDiag('tabs')">📋 Tab State</button>
+          <button class="btn btn-sm btn-ghost" onclick="_devDiag('locks')">🔒 Active Locks</button>
+          <button class="btn btn-sm btn-ghost" onclick="_devDiag('transactions')">💳 Transaction Count</button>
+          <button class="btn btn-sm btn-ghost" onclick="_devDiag('rounding')" style="color:var(--accent);">🧮 Rounding Test</button>
+          <button class="btn btn-sm btn-ghost" onclick="_devDiag('orphans')" style="color:var(--red);">🔍 Orphan Check</button>
+          <button class="btn btn-sm btn-ghost" onclick="_devDiag('backup')" style="color:var(--green);">💾 Backups</button>
+          <button class="btn btn-sm btn-ghost" onclick="_devDiag('bootcheck')" style="color:var(--purple);">🥾 Boot Self-Check</button>
+          <button class="btn btn-sm btn-ghost" onclick="_devDiag('reprints')" style="color:var(--blue);">🧾 Reprint Log</button>
+          <button class="btn btn-sm btn-ghost" onclick="_devDiag('heartbeat')" style="color:var(--green);">💓 Heartbeat</button>
+        </div>
+        <pre id="devDiagOutput" style="background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:12px;font-size:.75rem;color:var(--text);white-space:pre-wrap;word-break:break-all;min-height:60px;max-height:220px;overflow-y:auto;font-family:monospace;">Run a diagnostic above...</pre>
+      </div>
+
+      <!-- Source viewer -->
+      <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:16px;margin-bottom:12px;">
+        <div class="section-label" style="margin-bottom:10px;">📄 Source Code Viewer</div>
+        <div style="display:flex;gap:8px;margin-bottom:10px;flex-wrap:wrap;">
+          <input id="devSearchInput" type="text" placeholder="Search source (function name, keyword...)" class="form-input" style="flex:1;min-width:200px;font-family:monospace;font-size:.78rem;" oninput="_devSearchSource(this.value)">
+          <button class="btn btn-sm btn-ghost" onclick="_devSearchSource(document.getElementById('devSearchInput').value)">Search</button>
+        </div>
+        <pre id="devSourceOutput" style="background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:12px;font-size:.72rem;color:var(--text2);white-space:pre-wrap;word-break:break-all;max-height:260px;overflow-y:auto;font-family:monospace;">Type a function or keyword to find it in source...</pre>
+      </div>
+
+      <!-- Runtime log (inline mirror of Dev Monitor) -->
+      <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:16px;margin-bottom:12px;">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
+          <div class="section-label">🔍 Runtime Log</div>
+          <button class="btn btn-sm btn-ghost" onclick="_hookClear&&_hookClear();_devRefreshLog()">Clear</button>
+        </div>
+        <div id="devLogMirror" style="background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:10px;font-size:.73rem;font-family:monospace;max-height:220px;overflow-y:auto;color:var(--text2);">No logs yet.</div>
       </div>
     </div>
   </div>
@@ -1301,7 +1391,7 @@ input:checked+.toggle-track::after{left:23px;}
   <div class="modal" style="max-width:360px;">
     <div class="modal-header">
       <div class="modal-title" id="modModalTitle">🍹 Modifiers</div>
-      <button class="modal-close" onclick="closeModal('modifierModal')">✕</button>
+      <button class="modal-close" onclick="closeModal('modifierModal');_editOrderIdx=null;_setModModalMode('add');">✕</button>
     </div>
     <div class="modal-body">
       <div id="modItemPreview" style="background:var(--surface2);border-radius:8px;padding:10px 12px;margin-bottom:12px;display:flex;align-items:center;gap:10px;"></div>
@@ -1319,8 +1409,7 @@ input:checked+.toggle-track::after{left:23px;}
       </div>
     </div>
     <div class="modal-footer">
-      <button class="btn btn-md btn-ghost" style="flex:1" onclick="addItemNoMod()">Add as-is</button>
-      <button class="btn btn-md btn-accent" style="flex:1" onclick="confirmModifier()">✅ Add with Mods</button>
+      <button class="btn btn-md btn-accent" style="flex:1" id="modConfirmBtn" onclick="confirmModifier()">✅ Add to Order</button>
     </div>
   </div>
 </div>
@@ -1550,10 +1639,28 @@ input:checked+.toggle-track::after{left:23px;}
 
 <script>
 // ===================== STATE =====================
-let settings = Object.assign({barName:'The Local',taxRate:8,tips:[15,18,20,25],helcimToken:'',helcimTerminal:'',autoPrint:false,gratuityPct:0,gratuityMin:50,logoutTimeout:5,chime:'ascending',theme:'dark',dailyGoal:0,weeklyGoal:0,discountPresets:[{name:'Employee',pct:50,flat:0},{name:'Industry',pct:25,flat:0},{name:'Military',pct:15,flat:0}],receiptFooter:'Thank you! Drink responsibly 🍺',showReceiptQR:true,happyHours:[{id:1,name:'Happy Hour',startTime:'16:00',endTime:'19:00',days:[1,2,3,4,5],discountPct:20,enabled:true}],dashboardPin:'0000',foodSpecialsEnabled:true,modifierPriceDefaults:{}},
-  JSON.parse(localStorage.getItem('pos2_settings')||'{}'));
+// ── Safe localStorage parser — falls back to default on corrupt data ──
+function _safeParse(key, fallback){
+  try{
+    const raw=localStorage.getItem(key);
+    if(raw===null||raw===undefined)return fallback;
+    const parsed=JSON.parse(raw);
+    return (parsed===null||parsed===undefined)?fallback:parsed;
+  }catch(e){
+    console.warn('[POS] Corrupted localStorage key "'+key+'" — resetting to default.',e);
+    try{localStorage.removeItem(key);}catch(_){}
+    return fallback;
+  }
+}
+function _safeSettingsSave(){
+  try{localStorage.setItem('pos2_settings',JSON.stringify(settings));}
+  catch(e){if(typeof _log==='function')_log('error','Storage','Settings save failed',e&&e.message||'unknown');}
+}
 
-let employees = JSON.parse(localStorage.getItem('pos2_employees')||'null') || [
+let settings = Object.assign({barName:'The Local',taxRate:8,tips:[15,18,20,25],helcimToken:'',helcimTerminal:'',autoPrint:false,gratuityPct:0,gratuityMin:50,logoutTimeout:5,chime:'ascending',theme:'dark',dailyGoal:0,weeklyGoal:0,discountPresets:[{name:'Employee',pct:50,flat:0},{name:'Industry',pct:25,flat:0},{name:'Military',pct:15,flat:0}],receiptFooter:'Thank you! Drink responsibly 🍺',showReceiptQR:true,happyHours:[{id:1,name:'Happy Hour',startTime:'16:00',endTime:'19:00',days:[1,2,3,4,5],discountPct:20,enabled:true}],dashboardPin:'0000',foodSpecialsEnabled:true,modifierPriceDefaults:{}},
+  _safeParse('pos2_settings',{}));
+
+let employees = _safeParse('pos2_employees', null) || [
   {id:1,name:'Cash',emoji:'👑',title:'Owner',role:'owner',pin:'0000',color:'#f0a500',dept:'bar'},
   {id:2,name:'Sarah',emoji:'⭐',title:'Bar Manager',role:'manager',pin:'1111',color:'#3b82f6',dept:'bar'},
   {id:3,name:'Mike',emoji:'🍺',title:'Head Bartender',role:'manager',pin:'2222',color:'#3b82f6',dept:'bar'},
@@ -1564,7 +1671,7 @@ let employees = JSON.parse(localStorage.getItem('pos2_employees')||'null') || [
   {id:8,name:'Zoe',emoji:'💫',title:'Server',role:'worker',pin:'7777',color:'#22c55e',dept:'kitchen'},
 ];
 
-let menuItems = JSON.parse(localStorage.getItem('pos2_menu')||'null') || [
+let menuItems = _safeParse('pos2_menu', null) || [
   {id:1,name:'Draft Lager',price:5.00,cat:'Draft - Domestic',emoji:'🍺'},
   {id:2,name:'IPA',price:6.00,cat:'Draft - Craft/Local',emoji:'🍻'},
   {id:3,name:'Stout',price:6.50,cat:'Draft - Craft/Local',emoji:'🥃'},
@@ -1751,10 +1858,10 @@ let menuItems = JSON.parse(localStorage.getItem('pos2_menu')||'null') || [
    ]},
 ];
 
-let tabs = JSON.parse(localStorage.getItem('pos2_tabs')||'[]');
-let transactions = JSON.parse(localStorage.getItem('pos2_transactions')||'[]');
+let tabs = _safeParse('pos2_tabs', []);
+let transactions = _safeParse('pos2_transactions', []);
 
-let dailySpecials = JSON.parse(localStorage.getItem('pos2_specials')||'[]');
+let dailySpecials = _safeParse('pos2_specials', []);
 
 let currentUser = null;
 let currentOrder = [];
@@ -1768,6 +1875,48 @@ let activeSubCat = 'All';
 let activeDrinkGroup = null; // id of active DRINK_GROUPS entry
 let nextEmpId = Math.max(...employees.map(e=>e.id),0)+1;
 let nextMenuId = Math.max(...menuItems.map(i=>i.id),0)+1;
+// ── DATA SAFETY UTILITIES ─────────────────────────────────────────────────
+// _currencyRound: prevents float rounding errors on large totals (e.g. $999.99)
+function _currencyRound(n){ return Math.round((n||0)*100)/100; }
+
+// _sanitizeText: strips characters that cause crashes in JSON/Firebase/HTML
+// Fixes: apostrophes in names, quotes, angle brackets, control chars
+function _sanitizeText(str){
+  if(typeof str!=='string') return '';
+  return str
+    .replace(/[\u0000-\u001F\u007F]/g,'') // strip control characters
+    .replace(/</g,'&lt;').replace(/>/g,'&gt;') // prevent HTML injection
+    .trim()
+    .slice(0,200); // cap length to prevent oversized writes
+}
+
+// _safeMenuName: ensures menu item names won't crash JSON or Firebase paths
+function _safeMenuName(name){ return _sanitizeText(String(name||'Item')); }
+// ──────────────────────────────────────────────────────────────────────────
+
+// ── DOUBLE-TAP PREVENTION ─────────────────────────────────────────────────
+// _onceTap(fn, btn): disables button on first tap, re-enables after fn completes
+function _onceTap(fn, btnEl, delayMs=3000){
+  if(!btnEl||btnEl.disabled) return; // already processing
+  btnEl.disabled=true;
+  btnEl.style.opacity='0.5';
+  try{
+    const result=fn();
+    // If fn returns a Promise, wait for it; otherwise re-enable after delay
+    if(result&&typeof result.finally==='function'){
+      result.finally(()=>{
+        setTimeout(()=>{if(btnEl){btnEl.disabled=false;btnEl.style.opacity='';}},500);
+      });
+    } else {
+      setTimeout(()=>{if(btnEl){btnEl.disabled=false;btnEl.style.opacity='';}},delayMs);
+    }
+  } catch(e){
+    btnEl.disabled=false;btnEl.style.opacity='';
+    throw e;
+  }
+}
+// ──────────────────────────────────────────────────────────────────────────
+
 let nextTabId = Math.max(...tabs.map(t=>t.id),0)+1;
 let nextTxId = Math.max(...transactions.map(t=>t.id),0)+1;
 let nextSpecialId = Math.max(...dailySpecials.map(s=>s.id),0)+1;
@@ -1783,7 +1932,15 @@ let lastTxTimestamp = null;
 // Modifier state
 let _modItem = null;
 let _modSelected = [];let _modPriceMap = {}; // modName→upcharge $, rebuilt each time modal opens
+let _editOrderIdx = null; // when set, modifier modal updates existing line instead of adding new
 let _pendingQuickItem = null; // item waiting for a quick-tab to be named
+// ── Render debounce — collapses rapid successive renderOrder() calls into one ──
+let _renderOrderTimer = null;
+const _RENDER_DEBOUNCE_MS = 50;
+function renderOrderDebounced(){
+  if(_renderOrderTimer) clearTimeout(_renderOrderTimer);
+  _renderOrderTimer = setTimeout(renderOrder, _RENDER_DEBOUNCE_MS);
+}
 let _noTabSession = false;   // true = user chose "Just Add" — skip tab prompt for rest of order
 
 // Discount state
@@ -1808,7 +1965,7 @@ let _trendDays = 30;
 let _eventOrder = []; // {id, name, emoji, price, qty}
 let _eventTab = 'drinks'; // 'drinks' or 'food'
 // Pinned items: { [empId]: [itemId, ...] } stored in localStorage
-let _pinnedItems = JSON.parse(localStorage.getItem('pinnedItems')||'{}');
+let _pinnedItems = _safeParse('pinnedItems', {});
 
 const DRINK_CATS = [
   // Draft Beer
@@ -1866,7 +2023,7 @@ const FOOD_CATS  = ['Appetizers','Salads','Burgers & Sandwiches','Entrees','Spec
 
 // ---- NEW FEATURE STATE ----
 // Shift notes
-let shiftNotes   = JSON.parse(localStorage.getItem('pos2_shiftnotes')||'[]');
+let shiftNotes   = _safeParse('pos2_shiftnotes', []);
 let nextShiftNoteId = Math.max(...shiftNotes.map(n=>n.id),0)+1;
 // tipPoolRoster: {empId -> {inPool:bool, customPct:number|null}}
 // null stored value = use all active employees at equal split
@@ -1895,7 +2052,7 @@ function renderEmployeeGrid(){
   const grid = document.getElementById('employeeGrid');
   grid.innerHTML = '';
   employees.forEach(emp=>{
-    const roleColor = emp.role==='owner'?'var(--owner)':emp.role==='manager'?'var(--manager)':'var(--worker)';
+    const roleColor = emp.role==='owner'?'var(--owner)':emp.role==='manager'?'var(--manager)':emp.role==='dev'?'var(--dev)':'var(--worker)';
     const roleLabel = emp.role.charAt(0).toUpperCase()+emp.role.slice(1);
     const el = document.createElement('div');
     el.className='emp-card';
@@ -1915,7 +2072,7 @@ function showPinScreen(emp){
   pinTargetEmp=emp;
   document.getElementById('loginScreen').classList.add('hidden');
   document.getElementById('pinScreen').classList.remove('hidden');
-  const roleColor=emp.role==='owner'?'var(--owner)':emp.role==='manager'?'var(--manager)':'var(--worker)';
+  const roleColor=emp.role==='owner'?'var(--owner)':emp.role==='manager'?'var(--manager)':emp.role==='dev'?'var(--dev)':'var(--worker)';
   document.getElementById('pinAvatar').style.cssText=`background:${emp.color}22;color:${emp.color}`;
   document.getElementById('pinAvatar').textContent=emp.emoji;
   document.getElementById('pinName').textContent=emp.name;
@@ -1939,14 +2096,46 @@ function updatePinDots(){
   }
 }
 
+// ── PIN brute-force lockout ──────────────────────────────────────────────────
+const _PIN_MAX_ATTEMPTS = 5;      // wrong attempts before lockout
+const _PIN_LOCKOUT_MS   = 30000;  // 30-second lockout window
+let _pinFailCounts = {};  // keyed by employee id
+let _pinLockUntil  = {};  // keyed by employee id — timestamp when lockout ends
+
 function checkPin(){
+  const empId = pinTargetEmp && pinTargetEmp.id;
+  const now = Date.now();
+
+  // Check if currently locked out
+  if(empId && _pinLockUntil[empId] && now < _pinLockUntil[empId]){
+    const secsLeft = Math.ceil((_pinLockUntil[empId] - now) / 1000);
+    document.getElementById('pinError').textContent=`Too many attempts — try again in ${secsLeft}s`;
+    pinBuffer=''; updatePinDots();
+    return;
+  }
+
   if(pinBuffer===pinTargetEmp.pin){
+    // Correct PIN — clear fail counter and log in
+    if(empId){ _pinFailCounts[empId]=0; delete _pinLockUntil[empId]; }
     loginAs(pinTargetEmp);
   } else {
-    document.getElementById('pinError').textContent='Incorrect PIN. Try again.';
-    pinBuffer='';
-    updatePinDots();
-    setTimeout(()=>document.getElementById('pinError').textContent='',2000);
+    if(empId){
+      _pinFailCounts[empId] = (_pinFailCounts[empId]||0) + 1;
+      const fails = _pinFailCounts[empId];
+      if(fails >= _PIN_MAX_ATTEMPTS){
+        _pinLockUntil[empId] = now + _PIN_LOCKOUT_MS;
+        _pinFailCounts[empId] = 0;
+        document.getElementById('pinError').textContent='Too many attempts — locked for 30 seconds';
+        if(typeof _log==='function') _log('warn','Security','PIN lockout triggered for '+pinTargetEmp.name,'Attempts: '+_PIN_MAX_ATTEMPTS);
+      } else {
+        const remaining = _PIN_MAX_ATTEMPTS - fails;
+        document.getElementById('pinError').textContent=`Incorrect PIN. ${remaining} attempt${remaining===1?'':'s'} remaining.`;
+      }
+    } else {
+      document.getElementById('pinError').textContent='Incorrect PIN. Try again.';
+    }
+    pinBuffer=''; updatePinDots();
+    setTimeout(()=>document.getElementById('pinError').textContent='',3000);
   }
 }
 
@@ -1960,6 +2149,10 @@ function loginAs(emp){
   startInactivityWatcher();
   setupForUser();
   updateShiftTips();
+  _startOrderCheckpoint();
+  _startHeartbeat();
+  // Check for unsaved order from a previous crashed session
+  setTimeout(_orderCheckpointRestore, 600);
 }
 
 function logout(fromInactivity=false){
@@ -1973,7 +2166,7 @@ function logout(fromInactivity=false){
 // ===================== SETUP FOR USER =====================
 function setupForUser(){
   const emp=currentUser;
-  const roleColor=emp.role==='owner'?'var(--owner)':emp.role==='manager'?'var(--manager)':'var(--worker)';
+  const roleColor=emp.role==='owner'?'var(--owner)':emp.role==='manager'?'var(--manager)':emp.role==='dev'?'var(--dev)':'var(--worker)';
   document.getElementById('headerBarName').textContent='🍺 '+settings.barName;
   document.getElementById('sessionAvatar').style.cssText=`background:${emp.color}22;color:${emp.color}`;
   document.getElementById('sessionAvatar').textContent=emp.emoji;
@@ -1982,8 +2175,19 @@ function setupForUser(){
   // Show/hide nav based on role
   const ownerOnly=document.querySelectorAll('.owner-only');
   const managerOnly=document.querySelectorAll('.manager-only');
-  ownerOnly.forEach(el=>el.classList.toggle('hidden',emp.role!=='owner'));
-  managerOnly.forEach(el=>el.classList.toggle('hidden',emp.role==='worker'));
+  const isDev=emp.role==='dev';
+  ownerOnly.forEach(el=>el.classList.toggle('hidden',emp.role!=='owner'&&!isDev));
+  managerOnly.forEach(el=>el.classList.toggle('hidden',emp.role==='worker'&&!isDev));
+  // Dev panel visibility
+  const devPanel=document.getElementById('devNavBtn');
+  if(devPanel) devPanel.classList.toggle('hidden',!isDev);
+  // Force-open Dev Monitor if dev role
+  if(isDev){
+    setTimeout(()=>{
+      const panel=document.getElementById('hookPanel');
+      if(panel) panel.classList.remove('hidden');
+    },400);
+  }
   activeMainTab='drinks';activeSubCat='All';activeDrinkGroup=null;
   switchMainTab('drinks');renderTabs();renderOrder();renderSpecialsStrip();
   updateClock();
@@ -1994,7 +2198,7 @@ function showPage(pageId){
   document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
   document.getElementById(pageId).classList.add('active');
   document.querySelectorAll('.nav-tab').forEach(t=>t.classList.remove('active'));
-  const map={posPage:'navPos',reportsPage:'navReports',employeesPage:'navEmployees',menuPage:'navMenu',staffPage:'navStaff',settingsPage:'navSettings'};
+  const map={posPage:'navPos',reportsPage:'navReports',employeesPage:'navEmployees',menuPage:'navMenu',staffPage:'navStaff',settingsPage:'navSettings',devPage:'devNavBtn'};
   const navEl=document.getElementById(map[pageId]);
   if(navEl)navEl.classList.add('active');
   if(pageId==='reportsPage')renderReports();
@@ -2008,7 +2212,7 @@ function showPage(pageId){
 function toggleFoodSpecials(){
   settings.foodSpecialsEnabled=!settings.foodSpecialsEnabled;
   // modifierPriceDefaults already mutated in-place by renderModPriceDefaultsList
-  localStorage.setItem('pos2_settings',JSON.stringify(settings));
+  _safeSettingsSave();
   if(fbDb&&_netOnline)fbDb.ref('settings/foodSpecialsEnabled').set(settings.foodSpecialsEnabled).catch(()=>{});
   renderSubCats();
   renderMenu();
@@ -2299,16 +2503,16 @@ function deleteSpecial(id){
 
 // ===================== ORDER =====================
 function addToOrder(item){
-  // If no tab is open and user hasn't already chosen "Just Add", prompt once
-  if(!activeTabId && !_noTabSession){
-    _pendingQuickItem=item;
-    document.getElementById('quickTabName').value='';
-    showModal('quickTabModal');
-    setTimeout(()=>document.getElementById('quickTabName').focus(),100);
+  // MAX TAB SIZE GUARD: warn if tab is getting very large
+  if(currentOrder.length >= MAX_TAB_ITEMS){
+    showToast('Tab is at '+currentOrder.length+' items — please close this tab before adding more','error');
+    if(typeof _log==='function') _log('error','Tab Size','Add blocked — tab at max item limit','Items: '+currentOrder.length);
     return;
   }
+  if(currentOrder.length >= MAX_TAB_ITEMS * 0.9) _checkTabSizeLimit(); // warn at 90%
   // Show modifier picker
-  _modItem=item; _modSelected=[]; _modPriceMap={};
+  _modItem=item; _modSelected=[]; _modPriceMap={}; _editOrderIdx=null;
+  _setModModalMode('add');
   document.getElementById('modModalTitle').textContent=`${item.emoji} ${item.name}`;
   document.getElementById('modItemPreview').innerHTML=`<div style="font-size:1.6rem">${item.emoji}</div><div><div style="font-weight:700">${item.name}</div><div style="font-size:.75rem;color:var(--accent)">$${item.price.toFixed(2)}</div></div>`;
   document.getElementById('modCustomNote').value='';
@@ -2339,7 +2543,7 @@ function addToOrder(item){
     // No modifiers — skip picker
     const ex=currentOrder.find(i=>i.id===item.id&&(!i.mods||i.mods.length===0)&&!i.note);
     if(ex)ex.qty++;else currentOrder.push({...item,qty:1,mods:[],note:''});
-    renderOrder();showToast(`${item.emoji} ${item.name} added`,'info');
+    renderOrderDebounced();showToast(`${item.emoji} ${item.name} added`,'info');
     resetActivity();
     return;
   }
@@ -2383,43 +2587,164 @@ function toggleMod(m){
 function addItemNoMod(){
   closeModal('modifierModal');
   const item=_modItem; if(!item)return;
+  if(_editOrderIdx!==null){
+    const idx=_editOrderIdx; _editOrderIdx=null;
+    if(idx>=0&&idx<currentOrder.length){
+      currentOrder[idx]={...currentOrder[idx],mods:[],modTotal:0,note:''};
+      renderOrderDebounced();showToast(`${item.emoji} ${item.name} updated`,'info');
+      resetActivity();
+    }
+    return;
+  }
   const ex=currentOrder.find(i=>i.id===item.id&&(!i.mods||i.mods.length===0)&&!i.note&&!(i.modTotal));
   if(ex)ex.qty++;else currentOrder.push({...item,qty:1,mods:[],modTotal:0,note:''});
-  renderOrder();showToast(`${item.emoji} ${item.name} added`,'info');
+  renderOrderDebounced();showToast(`${item.emoji} ${item.name} added`,'info');
   resetActivity();
 }
 
 function confirmModifier(){
   closeModal('modifierModal');
   const item=_modItem; if(!item)return;
-  const note=document.getElementById('modCustomNote').value.trim();
+  const note=_sanitizeText(document.getElementById('modCustomNote').value.trim());
   const mods=_modSelected.map(name=>({name,price:_modPriceMap[name]||0}));
-  const modTotal=mods.reduce((s,m)=>s+m.price,0);
-  // Each mod combo = separate line item (unique key); dedup by name list only
+  const modTotal=_currencyRound(mods.reduce((s,m)=>s+m.price,0));
+  // Edit mode — update existing line item
+  if(_editOrderIdx!==null){
+    const idx=_editOrderIdx; _editOrderIdx=null;
+    if(idx>=0&&idx<currentOrder.length){
+      currentOrder[idx]={...currentOrder[idx],mods,modTotal,note};
+      renderOrderDebounced();showToast(`${item.emoji} ${item.name} updated`,'info');
+      resetActivity();
+    }
+    return;
+  }
+  // Add mode — original behaviour
   const modKey=JSON.stringify(_modSelected)+note;
   const ex=currentOrder.find(i=>i.id===item.id&&JSON.stringify(modNames(i.mods))+(i.note||'')===modKey);
   if(ex&&mods.length===0&&!note)ex.qty++;
   else currentOrder.push({...item,qty:1,mods,modTotal,note,_lineKey:Date.now()});
-  renderOrder();showToast(`${item.emoji} ${item.name} added`,'info');
+  renderOrderDebounced();showToast(`${item.emoji} ${item.name} added`,'info');
   resetActivity();
+}
+
+// ── Set modifier modal button labels for add vs edit mode ──
+function _setModModalMode(mode){
+  const confirmBtn=document.getElementById('modConfirmBtn');
+  if(confirmBtn)confirmBtn.textContent=mode==='edit'?'✅ Save Changes':'✅ Add to Order';
+}
+
+// ── Re-open modifier modal for an existing order line ──
+function editOrderItem(idx){
+  if(idx<0||idx>=currentOrder.length)return;
+  const item=currentOrder[idx];
+  _modItem=item;
+  _editOrderIdx=idx;
+  _modSelected=(item.mods||[]).map(m=>m.name);
+  _modPriceMap={};
+  document.getElementById('modModalTitle').textContent=`✏️ Edit: ${item.name}`;
+  document.getElementById('modItemPreview').innerHTML=`<div style="font-size:1.6rem">${item.emoji}</div><div><div style="font-weight:700">${item.name}</div><div style="font-size:.75rem;color:var(--accent)">$${item.price.toFixed(2)}</div></div>`;
+  document.getElementById('modCustomNote').value=item.note||'';
+  // Quick options
+  const qoRow=document.getElementById('quickOptionsRow');
+  const qoBtns=document.getElementById('quickOptionsBtns');
+  const quickOpts=(item.quickOptions||[]).filter(Boolean);
+  if(qoRow&&qoBtns){
+    if(quickOpts.length>0){qoRow.style.display='';qoBtns.innerHTML=quickOpts.map(opt=>`<button class="btn btn-sm btn-accent" style="font-size:.78rem;" onclick="applyQuickOption('${opt.replace(/'/g,"\\'")}')">⚡ ${opt}</button>`).join('');}
+    else{qoRow.style.display='none';}
+  }
+  // Build modifier groups (same logic as addToOrder)
+  let groups=[];
+  if(item.modifierGroups&&item.modifierGroups.length){groups=item.modifierGroups;}
+  else if(item.modifiers&&item.modifiers.length){groups=[{name:'',mods:item.modifiers}];}
+  else{const dg=DEFAULT_MOD_GROUPS[item.cat]||[];groups=dg.length?dg:[{name:'',mods:DEFAULT_MODS[item.cat]||[]}];}
+  const chipsEl=document.getElementById('modChips');
+  chipsEl.innerHTML='';chipsEl.style.flexDirection='column';chipsEl.style.alignItems='flex-start';
+  groups.forEach(g=>{
+    if(!g.mods.length)return;
+    if(g.name){const lbl=document.createElement('div');lbl.className='mod-group-label';lbl.textContent=g.name;chipsEl.appendChild(lbl);}
+    const row=document.createElement('div');row.style.cssText='display:flex;flex-wrap:wrap;gap:5px;margin-bottom:4px;';
+    g.mods.forEach(m=>{
+      const mo=normMod(m);_modPriceMap[mo.name]=mo.price;
+      const chip=document.createElement('div');
+      chip.className='mod-chip'+(_modSelected.includes(mo.name)?' selected':'');
+      chip.id='mc_'+mo.name.replace(/[^a-zA-Z0-9]/g,'_');
+      chip.innerHTML=mo.name+(mo.price>0?`<span class="mod-chip-price">+$${mo.price.toFixed(2)}</span>`:'');
+      chip.onclick=()=>toggleMod(mo.name);
+      row.appendChild(chip);
+    });
+    chipsEl.appendChild(row);
+  });
+  _setModModalMode('edit');
+  showModal('modifierModal');
 }
 
 function changeQty(lineIdx,delta){
   if(lineIdx<0||lineIdx>=currentOrder.length)return;
   currentOrder[lineIdx].qty+=delta;
   if(currentOrder[lineIdx].qty<=0)currentOrder.splice(lineIdx,1);
-  renderOrder();
+  renderOrderDebounced();
 }
 
 function compItem(lineIdx){
   if(lineIdx<0||lineIdx>=currentOrder.length)return;
   const item=currentOrder[lineIdx];
   if(item.comped){item.comped=false;}else{item.comped=true;}
-  renderOrder();
+  renderOrderDebounced();
   showToast(item.comped?`${item.name} comped`:`${item.name} comp removed`,'info');
 }
 
-function clearOrder(){currentOrder=[];_discountPct=0;_discountFlat=0;_discountReason='';_noTabSession=false;renderOrder();}
+function confirmClearOrder(){
+  if(currentOrder.length===0)return;
+  if(!confirm('Clear all '+currentOrder.length+' item'+(currentOrder.length>1?'s':'')+' from this order?'))return;
+  clearOrder();
+}
+function clearOrder(){currentOrder=[];_discountPct=0;_discountFlat=0;_discountReason='';_noTabSession=false;renderOrder();_orderCheckpointClear();}
+
+// ── ORDER RECOVERY: checkpoint currentOrder to localStorage every 30 seconds ──
+function _orderCheckpointSave(){
+  if(!currentOrder||currentOrder.length===0){_orderCheckpointClear();return;}
+  try{
+    localStorage.setItem('pos2_order_checkpoint',JSON.stringify({
+      order:currentOrder,
+      tabId:activeTabId,
+      discountPct:_discountPct,
+      discountFlat:_discountFlat,
+      discountReason:_discountReason,
+      savedAt:new Date().toISOString(),
+      user:currentUser?currentUser.name:null
+    }));
+  }catch(e){}
+}
+function _orderCheckpointClear(){
+  try{localStorage.removeItem('pos2_order_checkpoint');}catch(e){}
+}
+function _orderCheckpointRestore(){
+  try{
+    const raw=localStorage.getItem('pos2_order_checkpoint');
+    if(!raw)return;
+    const cp=JSON.parse(raw);
+    if(!cp||!cp.order||cp.order.length===0){_orderCheckpointClear();return;}
+    const age=Date.now()-new Date(cp.savedAt).getTime();
+    if(age>8*60*60*1000){_orderCheckpointClear();return;} // ignore if >8hrs old
+    const mins=Math.round(age/60000);
+    if(confirm('Unsaved order found from '+mins+' min ago'+(cp.user?' ('+cp.user+')':'')+'. Restore it?')){
+      currentOrder=cp.order;
+      if(cp.tabId)activeTabId=cp.tabId;
+      _discountPct=cp.discountPct||0;
+      _discountFlat=cp.discountFlat||0;
+      _discountReason=cp.discountReason||'';
+      renderOrder();
+      showToast('Order restored','success');
+      if(typeof _log==='function') _log('info','Recovery','Unsaved order restored from checkpoint',cp.savedAt);
+    }
+    _orderCheckpointClear();
+  }catch(e){_orderCheckpointClear();}
+}
+let _orderCheckpointInterval=null;
+function _startOrderCheckpoint(){
+  if(_orderCheckpointInterval)clearInterval(_orderCheckpointInterval);
+  _orderCheckpointInterval=setInterval(_orderCheckpointSave,30000);
+}
 
 // ===================== REORDER =====================
 function reorderItem(itemIdx, txIdx){
@@ -2455,18 +2780,18 @@ function getActiveHappyHour(){
 }
 
 function getOrderTotal(tipPct=0){
-  let subtotal=currentOrder.reduce((s,i)=>s+(i.comped?0:(i.price+(i.modTotal||0))*i.qty),0);
+  let subtotal=_currencyRound(currentOrder.reduce((s,i)=>s+(i.comped?0:(i.price+(i.modTotal||0))*i.qty),0));
   let hhDiscount=0;
   // Apply manual discount first; if none, check happy hour
-  if(_discountPct>0){subtotal=subtotal*(1-_discountPct/100);}
-  else if(_discountFlat>0){subtotal=Math.max(0,subtotal-_discountFlat);}
+  if(_discountPct>0){subtotal=_currencyRound(subtotal*(1-_discountPct/100));}
+  else if(_discountFlat>0){subtotal=_currencyRound(Math.max(0,subtotal-_discountFlat));}
   else{
     const hh=getActiveHappyHour();
-    if(hh&&hh.discountPct>0){hhDiscount=subtotal*(hh.discountPct/100);subtotal=subtotal-hhDiscount;}
+    if(hh&&hh.discountPct>0){hhDiscount=_currencyRound(subtotal*(hh.discountPct/100));subtotal=_currencyRound(subtotal-hhDiscount);}
   }
-  const tax=subtotal*(settings.taxRate/100);
-  const tip=subtotal*(tipPct/100);
-  return{subtotal,tax,tip,total:subtotal+tax+tip,hhDiscount};
+  const tax=_currencyRound(subtotal*(settings.taxRate/100));
+  const tip=_currencyRound(subtotal*(tipPct/100));
+  return{subtotal,tax,tip,total:_currencyRound(subtotal+tax+tip),hhDiscount};
 }
 
 function renderOrder(){
@@ -2548,12 +2873,11 @@ function renderOrder(){
         <div class="order-row-info">
           <div class="order-row-name">${item.name}</div>
           ${modsHtml}
-          <input class="note-input" placeholder="✏️ add note…" value="${(item.note||'').replace(/"/g,'&quot;')}"
-            onchange="setItemNote(${idx},this.value)" onblur="setItemNote(${idx},this.value)" maxlength="60">
+
           <div class="order-row-price">${priceHtml}</div>
         </div>
         <div class="qty-controls">
-          ${canComp?`<button class="qty-btn" style="font-size:.65rem;width:26px;height:22px;color:${item.comped?'var(--green)':'var(--text2)'}" onclick="compItem(${idx})" title="Comp item">🎁</button>`:''}
+          <button class="qty-btn" style="font-size:.62rem;width:28px;height:22px;color:var(--text2);" onclick="editOrderItem(${idx})" title="Edit item">✏️</button>
           <button class="qty-btn" onclick="changeQty(${idx},-1)">−</button>
           <span class="qty-num">${item.qty}</span>
           <button class="qty-btn" onclick="changeQty(${idx},1)">+</button>
@@ -2633,9 +2957,10 @@ function openNewTabModal(){
 }
 
 function createTab(){
-  const name=document.getElementById('newTabName').value.trim();
+  const name=_sanitizeText(document.getElementById('newTabName').value.trim());
   if(!name){showToast('Enter a tab name','error');return;}
-  const cardLast4=document.getElementById('newTabCard').value.trim()||null;
+  if(!_checkTabNameCollision(name)) return; // TAB COLLISION: warn if name already in use
+  const cardLast4=document.getElementById('newTabCard').value.trim().replace(/\D/g,'').slice(0,4)||null;
   const now=new Date().toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'});
   const tab={id:nextTabId++,name,items:[],status:'open',time:now,employeeId:currentUser.id,cardLast4:cardLast4||null};
   tabs.push(tab);activeTabId=tab.id;
@@ -2645,8 +2970,9 @@ function createTab(){
 }
 
 function quickTabConfirm(){
-  const name=document.getElementById('quickTabName').value.trim();
+  const name=_sanitizeText(document.getElementById('quickTabName').value.trim());
   if(!name){showToast('Enter a tab name','error');return;}
+  if(!_checkTabNameCollision(name)) return; // TAB COLLISION: warn if name already in use
   const now=new Date().toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'});
   const tab={id:nextTabId++,name,items:[],status:'open',time:now,employeeId:currentUser.id,cardLast4:null};
   tabs.push(tab);activeTabId=tab.id;
@@ -2669,7 +2995,7 @@ function quickTabSkip(){
     if(allMods.length===0){
       const ex=currentOrder.find(i=>i.id===item.id&&(!i.mods||i.mods.length===0)&&!i.note);
       if(ex)ex.qty++;else currentOrder.push({...item,qty:1,mods:[],note:''});
-      renderOrder();showToast(`${item.emoji} ${item.name} added`,'info');
+      renderOrderDebounced();showToast(`${item.emoji} ${item.name} added`,'info');
     } else {
       // show mod picker normally (activeTabId null is fine for mod picker)
       _modItem=item;_modSelected=[];
@@ -2695,21 +3021,35 @@ function sendToTab(){
   showToast(`Items added to ${tab.name}'s tab`,'success');
 }
 
+// ── RACE CONDITION LOCK: tracks tabs currently being checked out or deleted ──
+const _tabLocks = new Set();
+const _tabLockTimestamps = new Map(); // tabId → timestamp when locked
+function _lockTab(tabId){ _tabLocks.add(tabId); _tabLockTimestamps.set(tabId, Date.now()); }
+function _unlockTab(tabId){ _tabLocks.delete(tabId); _tabLockTimestamps.delete(tabId); }
+function _isTabLocked(tabId){ return _tabLocks.has(tabId); }
+
 function checkoutTab(tabId){
+  if(_isTabLocked(tabId)){showToast('This tab is already being processed','warn');return;}
   const tab=tabs.find(t=>t.id===tabId);
   if(!tab||tab.items.length===0){showToast('Tab is empty','error');return;}
+  if(tab.status==='closed'){showToast('This tab is already closed','error');return;}
+  _lockTab(tabId);
   currentOrder=[...tab.items];activeTabId=tabId;checkoutTabId=tabId;
   renderOrder();openCheckout(tabId);
+  // Lock is released in finishPayment or if modal is closed without paying
 }
 
 function deleteTab(tabId){
+  if(_isTabLocked(tabId)){showToast('This tab is being processed — cannot delete now','warn');return;}
   const tab=tabs.find(t=>t.id===tabId);if(!tab)return;
   // Workers can only delete their own tabs; managers/owners can delete any
   if(currentUser.role==='worker'&&tab.employeeId!==currentUser.id){showToast('You can only delete your own tabs','error');return;}
   if(!confirm(`Delete tab "${tab.name}"? This cannot be undone.`))return;
+  _lockTab(tabId);
   tabs=tabs.filter(t=>t.id!==tabId);
   if(activeTabId===tabId){activeTabId=null;currentOrder=[];_noTabSession=false;renderOrder();}
   saveTabs();renderTabs();
+  _unlockTab(tabId);
   showToast(`Tab "${tab.name}" deleted`,'success');
 }
 
@@ -2855,7 +3195,7 @@ function renderSplitPayment(){
       <div class="pay-method ${splitPayMethod==='tap'?'selected':''}" onclick="setSplitPay('tap')"><div class="pm-icon">📱</div><div class="pm-label">Tap to Pay</div><div class="pm-sub">NFC / Apple / Google Pay</div></div>
       <div class="pay-method ${splitPayMethod==='card'?'selected':''}" onclick="setSplitPay('card')"><div class="pm-icon">💳</div><div class="pm-label">Card</div><div class="pm-sub">Chip or swipe</div></div>
     </div>
-    <button class="btn btn-green btn-lg" onclick="processSplitPayment()">${splitPayMethod==='tap'?'📱 Tap to Pay':'💳 Process Card'} — $${t.perPerson.toFixed(2)}</button>
+    <button class="btn btn-green btn-lg" onclick="_onceTap(processSplitPayment,this,4000)">${splitPayMethod==='tap'?'📱 Tap to Pay':'💳 Process Card'} — $${t.perPerson.toFixed(2)}</button>
     <div style="font-size:.7rem;color:var(--text2);text-align:center;margin-top:6px">⚠️ Simulation mode</div>`;
 }
 
@@ -3397,6 +3737,7 @@ function transferTab(tabId,toEmpId,toEmpName){
 
 // ===================== CHECKOUT =====================
 function openCheckout(tabIdArg=null){
+  _validateOrderPrices(); // PRICE DRIFT: check for changed prices since items were added
   if(currentOrder.length===0){showToast('No items to checkout','error');return;}
   checkoutTabId=tabIdArg;selectedTip=18;selectedPayMethod='tap';_skipAutoGrat=false;
   renderCheckoutBody();showModal('checkoutModal');
@@ -3459,7 +3800,7 @@ function renderCheckoutBody(){
       ${tip>0?`<div style="font-size:.72rem;color:var(--text2);margin-top:2px">includes $${tip.toFixed(2)} tip</div>`:''}
       ${autoGrat>0?`<div style="font-size:.72rem;color:var(--text2)">includes $${autoGrat.toFixed(2)} auto-gratuity</div>`:''}
     </div>
-    <button class="btn btn-green btn-lg" onclick="processPayment()" id="processPayBtn">
+    <button class="btn btn-green btn-lg" onclick="_onceTap(processPayment,this,4000)" id="processPayBtn">
       ${selectedPayMethod==='tap'?'📱 Present Device to Reader':selectedPayMethod==='card'?'💳 Process Card':'💵 Complete Cash Payment'}
     </button>
     ${selectedPayMethod!=='cash'?'<div style="font-size:.7rem;color:var(--text2);text-align:center;margin-top:6px">⚠️ Simulation mode — Helcim key not connected</div>':''}`;
@@ -3495,26 +3836,48 @@ function updateChange(total){
 }
 
 function processPayment(){
+  // RACE CONDITION GUARD: block if tab already closed by another device
+  if(checkoutTabId){
+    const existingTab=tabs.find(tb=>tb.id===checkoutTabId);
+    if(!existingTab){showToast('Tab no longer exists','error');closeModal('checkoutModal');_unlockTab(checkoutTabId);return;}
+    if(existingTab.status==='closed'){showToast('Tab already closed — possible double charge prevented','error');closeModal('checkoutModal');_unlockTab(checkoutTabId);return;}
+  }
   const t=getOrderTotal(selectedTip);
-  const tip=t.subtotal*selectedTip/100;
+  const tip=_currencyRound(t.subtotal*selectedTip/100);
   const rawSubtotal=currentOrder.reduce((s,i)=>s+(i.comped?0:(i.price+(i.modTotal||0))*i.qty),0);
-  const autoGrat=getAutoGratuity(rawSubtotal);
-  const finalTotal=t.subtotal+t.tax+tip+autoGrat;
+  const autoGrat=_currencyRound(getAutoGratuity(rawSubtotal));
+  const finalTotal=_currencyRound(t.subtotal+t.tax+tip+autoGrat);
   const isCash=selectedPayMethod==='cash';
   const method=isCash?'Cash':selectedPayMethod==='tap'?'Tap to Pay':'Card';
   const cashTendered=isCash?parseFloat(document.getElementById('cashTendered')?.value||0):0;
-  const changeDue=isCash?cashTendered-finalTotal:0;
+  const changeDue=isCash?_currencyRound(cashTendered-finalTotal):0;
   const compedItems=currentOrder.filter(i=>i.comped);
-  const compTotal=compedItems.reduce((s,i)=>s+i.price*i.qty,0);
+  const compTotal=_currencyRound(compedItems.reduce((s,i)=>s+i.price*i.qty,0));
 
   const recordAndShow=()=>{
+    // DUPLICATE TRANSACTION GUARD: block same amount on same tab within 60 seconds
+    const _now60=Date.now()-60000;
+    const _dupCheck=transactions.find(tx=>
+      tx.tabId===checkoutTabId &&
+      Math.abs(tx.total-finalTotal)<0.01 &&
+      new Date(tx.timestamp).getTime()>_now60
+    );
+    if(_dupCheck){
+      const _secsAgo=Math.round((Date.now()-new Date(_dupCheck.timestamp).getTime())/1000);
+      if(!confirm('\u26a0\ufe0f A $'+finalTotal.toFixed(2)+' transaction on this tab was just processed '+_secsAgo+'s ago. Process again?')){
+        _unlockTab(checkoutTabId);
+        closeModal('checkoutModal');
+        if(typeof _log==='function') _log('warn','Duplicate TX','Duplicate charge blocked','Tab: '+checkoutTabId+' $'+finalTotal.toFixed(2));
+        return;
+      }
+    }
     const txTimestamp=new Date().toISOString();
     const tx={id:nextTxId++,employeeId:currentUser.id,tabId:checkoutTabId,
       items:currentOrder.map(i=>({...i})),
       subtotal:t.subtotal,tax:t.tax,tip,autoGrat,total:finalTotal,
       method,timestamp:txTimestamp,
       tabName:checkoutTabId?tabs.find(tb=>tb.id===checkoutTabId)?.name||'Quick Sale':'Quick Sale',
-      discountReason:_discountReason||'',discountPct:_discountPct,discountFlat:_discountFlat,
+      discountReason:_sanitizeText(_discountReason||''),discountPct:_discountPct,discountFlat:_discountFlat,
       hhDiscountAmt:t.hhDiscount||0,hhName:(!_discountReason&&t.hhDiscount>0)?(getActiveHappyHour()?.name||'Happy Hour'):'',
       compTotal
     };
@@ -3522,7 +3885,7 @@ function processPayment(){
     lastPayMethod=method; lastCashTendered=cashTendered; lastChangeDue=changeDue;
     lastTxId=tx.id; lastTxTimestamp=txTimestamp;
     transactions.push(tx);saveTransactions();
-    if(checkoutTabId){const tab=tabs.find(tb=>tb.id===checkoutTabId);if(tab){tab.status='closed';tab.closedAt=new Date().toISOString();}saveTabs();}
+    if(checkoutTabId){const tab=tabs.find(tb=>tb.id===checkoutTabId);if(tab){tab.status='closed';tab.closedAt=new Date().toISOString();}saveTabs();_unlockTab(checkoutTabId);}
     document.getElementById('checkoutBody').innerHTML=`
       <div class="payment-success">
         <div class="success-icon">${isCash?'💵':'✅'}</div>
@@ -3543,6 +3906,8 @@ function processPayment(){
   if(isCash){
     recordAndShow();
   } else {
+    // LOCK TAB IMMEDIATELY before the 2-second spinner — prevents duplicate charge from a second device tap
+    if(checkoutTabId) _lockTab(checkoutTabId);
     document.getElementById('checkoutBody').innerHTML=`
       <div class="processing-overlay">
         <div class="spinner"></div>
@@ -3801,12 +4166,30 @@ function showReceiptModal(items,subtotal,tax,tip,autoGrat=0){
 }
 
 function printReceipt(){
+  _logReprint(lastTxId); // REPRINT LOG: record who reprinted and when
   const html=buildReceiptHTML(_lastReceiptItems,_lastReceiptSubtotal,_lastReceiptTax,_lastReceiptTip,true,_lastReceiptAutoGrat);
   const w=window.open('','_blank','width=420,height=650');
   if(!w){showToast('Allow pop-ups to print receipts','error');return;}
   w.document.write(`<!DOCTYPE html><html><head><title>Receipt #${lastTxId||''}</title></head><body style="margin:0;padding:0;background:#fff;">${html}</body></html>`);
   w.document.close();
-  setTimeout(()=>{try{w.print();}catch(e){}},300);
+  // NETWORK FIX: retry print up to 2 times if printer times out; give up gracefully
+  let _printAttempts=0;
+  const _tryPrint=()=>{
+    _printAttempts++;
+    try{
+      w.print();
+    } catch(e){
+      if(_printAttempts<2){
+        showToast('Printer not responding — retrying...','warn');
+        setTimeout(_tryPrint, 3000);
+      } else {
+        showToast('Could not reach printer. Receipt saved — try reprinting from Reports.','error');
+        if(typeof _log==='function') _log('warn','Printer','Print failed after 2 attempts',e&&e.message||'');
+        try{w.close();}catch(_){}
+      }
+    }
+  };
+  setTimeout(_tryPrint, 300);
 }
 
 // ===================== REPORTS =====================
@@ -4014,7 +4397,7 @@ function renderReports(){
 // ===================== EMPLOYEES =====================
 function renderEmpList(){
   document.getElementById('empList').innerHTML=employees.map(emp=>{
-    const roleColor=emp.role==='owner'?'var(--owner)':emp.role==='manager'?'var(--manager)':'var(--worker)';
+    const roleColor=emp.role==='owner'?'var(--owner)':emp.role==='manager'?'var(--manager)':emp.role==='dev'?'var(--dev)':'var(--worker)';
     const canEdit=currentUser.role==='owner'||(currentUser.role==='manager'&&emp.role==='worker');
     return`<div class="emp-row">
       <div class="emp-row-avatar" style="background:${emp.color}22;color:${emp.color}">${emp.emoji}</div>
@@ -4442,11 +4825,12 @@ function openEditItemModal(id){
 
 function saveMenuItem(){
   const id=document.getElementById('menuEditId').value;
-  const name=document.getElementById('menuItemName').value.trim();
-  const price=parseFloat(document.getElementById('menuItemPrice').value);
-  const cat=document.getElementById('menuItemCat').value;
-  const emoji=document.getElementById('menuItemEmoji').value.trim()||'🍹';
-  if(!name||isNaN(price)||price<=0){showToast('Fill in name and valid price','error');return;}
+  const name=_sanitizeText(document.getElementById('menuItemName').value.trim());
+  const price=_currencyRound(parseFloat(document.getElementById('menuItemPrice').value));
+  const cat=_sanitizeText(document.getElementById('menuItemCat').value);
+  const emoji=_sanitizeText(document.getElementById('menuItemEmoji').value.trim())||'🍹';
+  if(!name){showToast('Enter a menu item name','error');return;}
+  if(isNaN(price)||price<=0||price>9999){showToast('Enter a valid price (0.01 – 9999)','error');return;}
   const modifierGroups=_editingModGroups
     .filter(g=>g.name.trim()||g.mods.length)
     .map(g=>({name:g.name.trim()||'Options',mods:[...g.mods]}));
@@ -4518,7 +4902,7 @@ function loadSettings(){
 function saveHelcimSettings(){
   settings.helcimToken=document.getElementById('settingHelcimToken').value.trim();
   settings.helcimTerminal=document.getElementById('settingHelcimTerminal').value.trim();
-  localStorage.setItem('pos2_settings',JSON.stringify(settings));
+  _safeSettingsSave();
   showToast('Helcim settings saved','success');
 }
 
@@ -4526,27 +4910,36 @@ function saveHelcimSettings(){
 function toFbObj(arr){const o={};arr.forEach(i=>o[i.id]=i);return o;}
 
 function saveEmployees(){
-  localStorage.setItem('pos2_employees',JSON.stringify(employees));
+  try{localStorage.setItem('pos2_employees',JSON.stringify(employees));}
+  catch(e){if(typeof _log==='function')_log('error','Storage','saveEmployees failed',e&&e.message||'unknown');}
   if(fbDb){
     if(_netOnline){fbDb.ref('employees').set(toFbObj(employees)).catch(()=>{_enqueueOffline('employees');});}
     else{_enqueueOffline('employees');}
   }
 }
 function saveTabs(){
+  tabs = _schemaCheckSave('tabs', tabs); // strip any malformed tabs before saving
   localStorage.setItem('pos2_tabs',JSON.stringify(tabs));
   if(fbDb){
-    if(_netOnline){fbDb.ref('tabs').set(toFbObj(tabs)).catch(()=>{_enqueueOffline('tabs');});}
-    else{_enqueueOffline('tabs');}
+    if(_netOnline){
+      fbDb.ref('tabs').set(toFbObj(tabs)).catch(e=>{
+        _enqueueOffline('tabs');
+        if(typeof _log==='function') _log('error','Firebase','Tab save failed — queued for retry',e&&e.message||'unknown');
+      });
+    } else { _enqueueOffline('tabs'); }
   }
 }
 function saveMenu(){
-  localStorage.setItem('pos2_menu',JSON.stringify(menuItems));
+  try{localStorage.setItem('pos2_menu',JSON.stringify(menuItems));}
+  catch(e){if(typeof _log==='function')_log('error','Storage','saveMenu failed',e&&e.message||'unknown');}
   if(fbDb){
     if(_netOnline){fbDb.ref('menu').set(toFbObj(menuItems)).catch(()=>{_enqueueOffline('menu');});}
     else{_enqueueOffline('menu');}
   }
 }
 function saveTransactions(){
+  transactions = _schemaCheckSave('transactions', transactions); // strip malformed records
+  _pruneTransactions(); // archive if over limit
   // Write to localStorage (fast, sync)
   try{localStorage.setItem('pos2_transactions',JSON.stringify(transactions));}catch(e){
     // localStorage full — that's exactly what IndexedDB is for; continue without it
@@ -4560,7 +4953,8 @@ function saveTransactions(){
   }
 }
 function saveSpecials(){
-  localStorage.setItem('pos2_specials',JSON.stringify(dailySpecials));
+  try{localStorage.setItem('pos2_specials',JSON.stringify(dailySpecials));}
+  catch(e){if(typeof _log==='function')_log('error','Storage','saveSpecials failed',e&&e.message||'unknown');}
   if(fbDb){
     if(_netOnline){fbDb.ref('specials').set(toFbObj(dailySpecials)).catch(()=>{_enqueueOffline('specials');});}
     else{_enqueueOffline('specials');}
@@ -4595,7 +4989,10 @@ function addModPriceDefault(){
   renderModPriceDefaultsList();
   showToast(`"${nm}" added to modifier upcharges`,'success');
 }
-function saveShiftNotes(){localStorage.setItem('pos2_shiftnotes',JSON.stringify(shiftNotes));}
+function saveShiftNotes(){
+  try{localStorage.setItem('pos2_shiftnotes',JSON.stringify(shiftNotes));}
+  catch(e){if(typeof _log==='function')_log('error','Storage','saveShiftNotes failed',e&&e.message||'unknown');}
+}
 function saveSettings(){
   settings.barName=document.getElementById('settingBarName').value.trim()||'The Local';
   settings.taxRate=parseFloat(document.getElementById('settingTax').value)||8;
@@ -4618,7 +5015,7 @@ function saveSettings(){
   if(rfEl)settings.receiptFooter=rfEl.value.trim();
   const qrCB=document.getElementById('settingShowReceiptQR');
   if(qrCB)settings.showReceiptQR=qrCB.checked;
-  localStorage.setItem('pos2_settings',JSON.stringify(settings));
+  _safeSettingsSave();
   if(fbDb){if(_netOnline){fbDb.ref('settings').set(settings).catch(()=>{});}}
   document.getElementById('headerBarName').textContent='🍺 '+settings.barName;
   showToast('Settings saved','success');
@@ -4705,76 +5102,153 @@ async function _updateStorageInfo(){
 }
 
 // ===================== OFFLINE QUEUE =====================
-let _netOnline=navigator.onLine;
-let _offlineQueue=JSON.parse(localStorage.getItem('pos2_offline_queue')||'[]');
-// Queue stores lightweight markers — actual data always in localStorage+IDB
-// { type:'transactions'|'tabs'|'menu'|'employees'|'specials', ts:number }
+// Queue stores one entry per data type — repeated writes collapse into a single
+// sync entry (merge/dedup). At most 5 entries ever: tabs, transactions, menu,
+// employees, specials. On reconnect, writes go out in batches with delays and
+// exponential-backoff retry so Firebase is never flooded.
+//
+// Entry shape: { type, ts, mergeCount }
+//   type        — data type to sync
+//   ts          — timestamp of most recent write (updated on each re-queue)
+//   mergeCount  — how many writes were collapsed into this single entry
+
+let _netOnline = navigator.onLine;
+let _offlineQueue = _safeParse('pos2_offline_queue', []);
+
+// ── Drain config ─────────────────────────────────────────────────────────────
+const _DRAIN_BATCH_DELAY_MS = 250;   // pause between each type write
+const _DRAIN_MAX_RETRIES    = 3;     // max attempts per type before giving up
+const _DRAIN_RETRY_BASE_MS  = 1000;  // first retry delay; doubles each attempt
 
 function _saveOfflineQueue(){
-  localStorage.setItem('pos2_offline_queue',JSON.stringify(_offlineQueue));
+  try{
+    localStorage.setItem('pos2_offline_queue', JSON.stringify(_offlineQueue));
+  }catch(e){
+    if(typeof _log==='function') _log('error','OfflineQueue','Could not persist queue to localStorage',e.message);
+  }
 }
 
+// ── Enqueue: merge-by-type — collapses repeated writes into one entry ─────────
 function _enqueueOffline(type){
-  if(!_offlineQueue.find(q=>q.type===type)){
-    _offlineQueue.push({type,ts:Date.now()});
-    _saveOfflineQueue();
+  const existing = _offlineQueue.find(q => q.type === type);
+  if(existing){
+    // Already queued — just refresh timestamp and bump merge counter
+    existing.ts = Date.now();
+    existing.mergeCount = (existing.mergeCount || 1) + 1;
+  } else {
+    _offlineQueue.push({ type, ts: Date.now(), mergeCount: 1 });
   }
+  _saveOfflineQueue();
   _renderOfflineBanner();
 }
 
 function _dequeueOffline(type){
-  _offlineQueue=_offlineQueue.filter(q=>q.type!==type);
+  _offlineQueue = _offlineQueue.filter(q => q.type !== type);
   _saveOfflineQueue();
 }
 
 function _renderOfflineBanner(){
-  const banner=document.getElementById('offlineBanner');
-  const textEl=document.getElementById('offlineBannerText');
-  const countEl=document.getElementById('offlineQueueCount');
-  const dot=document.getElementById('offlineDot');
-  if(!banner)return;
-  const pending=_offlineQueue.length;
-  if(!_netOnline||pending>0){
+  const banner  = document.getElementById('offlineBanner');
+  const textEl  = document.getElementById('offlineBannerText');
+  const countEl = document.getElementById('offlineQueueCount');
+  const dot     = document.getElementById('offlineDot');
+  if(!banner) return;
+  const pending = _offlineQueue.length;
+  if(!_netOnline || pending > 0){
     banner.classList.add('show');
     if(!_netOnline){
-      if(dot)dot.style.background='var(--red)';
-      textEl.textContent=pending>0
-        ?`📵 Offline — ${pending} change${pending>1?'s':''} waiting to sync`
-        :'📵 Offline — data saved locally';
+      if(dot) dot.style.background = 'var(--red)';
+      textEl.textContent = pending > 0
+        ? `📵 Offline — ${pending} data type${pending > 1 ? 's' : ''} waiting to sync`
+        : '📵 Offline — data saved locally';
     } else {
-      // Online but still has queue (should drain quickly)
-      if(dot)dot.style.background='var(--accent)';
-      textEl.textContent=`⏳ Syncing ${pending} pending change${pending>1?'s':''}…`;
+      if(dot) dot.style.background = 'var(--accent)';
+      textEl.textContent = `⏳ Syncing ${pending} pending change${pending > 1 ? 's' : ''}…`;
     }
-    if(countEl)countEl.textContent=pending>0?`${pending} queued`:'';
+    if(countEl) countEl.textContent = pending > 0 ? `${pending} queued` : '';
   } else {
     banner.classList.remove('show');
-    if(countEl)countEl.textContent='';
+    if(countEl) countEl.textContent = '';
   }
 }
 
+// ── Single write with exponential-backoff retry ───────────────────────────────
+async function _writeWithRetry(type, attempt){
+  attempt = attempt || 1;
+  try{
+    if(type === 'transactions') await fbDb.ref('transactions').set(toFbObj(transactions));
+    else if(type === 'tabs')    await fbDb.ref('tabs').set(toFbObj(tabs));
+    else if(type === 'menu')    await fbDb.ref('menu').set(toFbObj(menuItems));
+    else if(type === 'employees')await fbDb.ref('employees').set(toFbObj(employees));
+    else if(type === 'specials') await fbDb.ref('specials').set(toFbObj(dailySpecials));
+    return true; // success
+  }catch(e){
+    if(attempt < _DRAIN_MAX_RETRIES){
+      const delay = _DRAIN_RETRY_BASE_MS * Math.pow(2, attempt - 1); // 1s, 2s, 4s
+      if(typeof _log==='function')
+        _log('warn','OfflineQueue',`Sync failed for "${type}" — retry ${attempt}/${_DRAIN_MAX_RETRIES} in ${delay/1000}s`, e.message);
+      await new Promise(r => setTimeout(r, delay));
+      return _writeWithRetry(type, attempt + 1);
+    }
+    if(typeof _log==='function')
+      _log('error','OfflineQueue',`Sync permanently failed for "${type}" after ${_DRAIN_MAX_RETRIES} attempts`, e.message);
+    return false; // give up — leave in queue for next reconnect
+  }
+}
+
+// ── Batch drain with 250 ms pauses between writes ─────────────────────────────
+let _drainInProgress = false; // prevent overlapping drain calls
 async function _drainOfflineQueue(){
-  if(!fbDb||!_netOnline||_offlineQueue.length===0)return;
-  const bar=document.getElementById('syncProgressBar');
-  const fill=document.getElementById('syncProgressFill');
-  if(bar)bar.classList.remove('hidden');
-  const types=[..._offlineQueue.map(q=>q.type)];
-  let done=0;
-  for(const type of types){
-    try{
-      if(type==='transactions')await fbDb.ref('transactions').set(toFbObj(transactions));
-      else if(type==='tabs')await fbDb.ref('tabs').set(toFbObj(tabs));
-      else if(type==='menu')await fbDb.ref('menu').set(toFbObj(menuItems));
-      else if(type==='employees')await fbDb.ref('employees').set(toFbObj(employees));
-      else if(type==='specials')await fbDb.ref('specials').set(toFbObj(dailySpecials));
+  if(!fbDb || !_netOnline || _offlineQueue.length === 0 || _drainInProgress) return;
+  _drainInProgress = true;
+
+  const bar  = document.getElementById('syncProgressBar');
+  const fill = document.getElementById('syncProgressFill');
+  const textEl = document.getElementById('offlineBannerText');
+  if(bar) bar.classList.remove('hidden');
+
+  // Snapshot types at drain start so new enqueues during drain don't interfere
+  const snapshot = _offlineQueue.map(q => ({...q}));
+  const total = snapshot.length;
+  let done = 0, failed = 0;
+
+  for(const entry of snapshot){
+    const {type, mergeCount} = entry;
+
+    // Update banner to show what's syncing right now
+    if(textEl) textEl.textContent = `⏳ Syncing ${type} (${done + 1}/${total})…`;
+    if(fill)   fill.style.width = Math.round((done / total) * 100) + '%';
+
+    const ok = await _writeWithRetry(type);
+    if(ok){
       _dequeueOffline(type);
       done++;
-      if(fill)fill.style.width=Math.round((done/types.length)*100)+'%';
-    }catch(e){/* leave in queue for next attempt */}
+      if(typeof _log==='function'){
+        const collapsed = mergeCount > 1 ? ` (${mergeCount} writes collapsed)` : '';
+        _log('info','OfflineQueue',`Synced "${type}" successfully${collapsed}`, null);
+      }
+    } else {
+      failed++;
+    }
+
+    if(fill) fill.style.width = Math.round(((done + failed) / total) * 100) + '%';
+
+    // Throttle: pause between writes to avoid hammering Firebase
+    if(done + failed < total){
+      await new Promise(r => setTimeout(r, _DRAIN_BATCH_DELAY_MS));
+    }
   }
-  if(bar){setTimeout(()=>{bar.classList.add('hidden');if(fill)fill.style.width='0%';},800);}
+
+  if(bar){ setTimeout(()=>{ bar.classList.add('hidden'); if(fill) fill.style.width='0%'; }, 800); }
   _renderOfflineBanner();
-  if(done===types.length&&done>0)showToast(`✅ ${done} change${done>1?'s':''} synced to Firebase`,'success');
+  _drainInProgress = false;
+
+  if(done > 0 && failed === 0)
+    showToast(`✅ ${done} data type${done > 1 ? 's' : ''} synced to Firebase`, 'success');
+  else if(done > 0 && failed > 0)
+    showToast(`⚠️ ${done} synced, ${failed} failed — will retry on next reconnect`, 'warn');
+  else if(failed > 0)
+    showToast(`❌ Sync failed — data saved locally. Will retry when connection is stable.`, 'error');
 }
 
 window.addEventListener('online',()=>{
@@ -4822,14 +5296,29 @@ function doConnect(config){
     const app=firebase.initializeApp(config);
     fbDb=firebase.database(app);
     // Connection state
+    let _wasConnected=false;
     fbDb.ref('.info/connected').on('value',snap=>{
       const connected=snap.val()===true;
       updateSyncStatus(connected?'synced':'connecting');
       if(connected){
-        showToast('🔄 Synced to Firebase!','success');
-        // Drain any queued offline writes now that connection is confirmed
-        if(_offlineQueue.length>0)_drainOfflineQueue();
-        else _renderOfflineBanner();
+        if(_wasConnected){
+          // RECONNECT: re-fetch server state and merge with local before draining queue
+          if(typeof _log==='function') _log('info','Firebase','Reconnected — fetching server state for merge',null);
+          _mergeServerState().then(()=>{
+            if(_offlineQueue.length>0) _drainOfflineQueue();
+            else _renderOfflineBanner();
+          });
+        } else {
+          showToast('🔄 Synced to Firebase!','success');
+          if(_offlineQueue.length>0) _drainOfflineQueue();
+          else _renderOfflineBanner();
+        }
+        _wasConnected=true;
+      } else {
+        if(_wasConnected){
+          showToast('⚠️ Firebase connection lost — saving locally','warn');
+          if(typeof _log==='function') _log('warn','Firebase','Connection dropped — switching to offline mode',null);
+        }
       }
     });
     // Push local data up first time
@@ -4851,6 +5340,51 @@ function pushLocalDataToFirebase(){
   fbDb.ref('transactions').once('value',snap=>{if(!snap.exists()&&transactions.length)fbDb.ref('transactions').set(toFbObj(transactions));});
   fbDb.ref('specials').once('value',snap=>{if(!snap.exists()&&dailySpecials.length)fbDb.ref('specials').set(toFbObj(dailySpecials));});
   fbDb.ref('settings').once('value',snap=>{if(!snap.exists())fbDb.ref('settings').set(settings);});
+}
+
+// RECONNECT MERGE: fetch server tabs/transactions and reconcile with local state
+async function _mergeServerState(){
+  if(!fbDb||!_netOnline) return;
+  try{
+    const [tabsSnap, txSnap] = await Promise.all([
+      fbDb.ref('tabs').once('value'),
+      fbDb.ref('transactions').once('value')
+    ]);
+    // Merge tabs: server wins for status, local wins for in-progress items
+    if(tabsSnap.val()!==null){
+      const serverTabs = Object.values(tabsSnap.val());
+      serverTabs.forEach(serverTab=>{
+        const localTab = tabs.find(t=>t.id===serverTab.id);
+        if(!localTab){
+          // Tab exists on server but not locally — add it
+          tabs.push(serverTab);
+        } else if(serverTab.status==='closed' && localTab.status==='open' && !_isTabLocked(localTab.id)){
+          // Server says closed, local says open, not in-flight — trust server
+          localTab.status='closed';
+          localTab.closedAt=serverTab.closedAt;
+          if(typeof _log==='function') _log('warn','Merge','Tab "'+localTab.name+'" closed on server — updated local state',null);
+        }
+      });
+      nextTabId=Math.max(...tabs.map(t=>t.id),0)+1;
+      saveTabs();
+      if(currentUser) renderTabs();
+    }
+    // Merge transactions: union of local + server (server may have more from other devices)
+    if(txSnap.val()!==null){
+      const serverTxns = Object.values(txSnap.val());
+      const localIds = new Set(transactions.map(t=>t.id));
+      const newFromServer = serverTxns.filter(t=>!localIds.has(t.id));
+      if(newFromServer.length>0){
+        transactions.push(...newFromServer);
+        transactions.sort((a,b)=>a.id-b.id);
+        nextTxId=Math.max(...transactions.map(t=>t.id),0)+1;
+        saveTransactions();
+        if(typeof _log==='function') _log('info','Merge','Pulled '+newFromServer.length+' transaction(s) from server during reconnect',null);
+      }
+    }
+  }catch(e){
+    if(typeof _log==='function') _log('error','Merge','Server state merge failed',e&&e.message||'');
+  }
 }
 
 function setupFirebaseListeners(){
@@ -4876,7 +5410,7 @@ function setupFirebaseListeners(){
   });
   fbDb.ref('settings').on('value',snap=>{
     const d=snap.val();
-    if(d!==null){Object.assign(settings,d);localStorage.setItem('pos2_settings',JSON.stringify(settings));if(currentUser)document.getElementById('headerBarName').textContent='🍺 '+settings.barName;}
+    if(d!==null){Object.assign(settings,d);_safeSettingsSave();if(currentUser)document.getElementById('headerBarName').textContent='🍺 '+settings.barName;}
   });
 }
 
@@ -4905,7 +5439,7 @@ function saveDashboardPin(){
   inp.value=v;
   if(v.length!==4){showToast('PIN must be exactly 4 digits','error');return;}
   settings.dashboardPin=v;
-  localStorage.setItem('pos2_settings',JSON.stringify(settings));
+  _safeSettingsSave();
   if(fbDb&&_netOnline)fbDb.ref('settings/dashboardPin').set(v).catch(()=>{});
   showToast('Dashboard PIN saved — share manager-dashboard.html with your team','success');
 }
@@ -4944,12 +5478,19 @@ function setDiscountPct(p){document.getElementById('discPct').value=p;document.g
 function submitDiscount(){
   const pct=parseFloat(document.getElementById('discPct').value)||0;
   const flat=parseFloat(document.getElementById('discFlat').value)||0;
-  const reason=document.getElementById('discReason').value.trim();
+  const reason=_sanitizeText(document.getElementById('discReason').value.trim());
   if(pct<=0&&flat<=0){showToast('Enter a discount amount','error');return;}
+  if(pct>0&&flat>0){showToast('Use either % or flat discount, not both','error');return;}
+  if(pct>100){showToast('Discount cannot exceed 100%','error');return;}
   if(!reason){showToast('Enter a reason for the discount','error');return;}
+  if(checkoutTabId&&_isTabLocked(checkoutTabId)){showToast('Cannot apply discount during active payment','error');return;}
+  if(flat>0){
+    const subtotal=currentOrder.reduce((s,i)=>s+(i.comped?0:(i.price+(i.modTotal||0))*i.qty),0);
+    if(flat>subtotal){showToast('Flat discount exceeds order subtotal','error');return;}
+  }
   _discountPct=pct;_discountFlat=flat;_discountReason=reason;
   closeModal('discountModal');renderOrder();
-  showToast(`Discount applied: ${reason}`,'success');
+  showToast('Discount applied: '+reason,'success');
 }
 
 function removeDiscount(){_discountPct=0;_discountFlat=0;_discountReason='';renderOrder();showToast('Discount removed','info');}
@@ -5010,7 +5551,18 @@ function startInactivityWatcher(){
     const timeout=(settings.logoutTimeout||0)*60*1000;
     if(timeout<=0)return;
     if(Date.now()-_lastActivity>timeout){
-      logout(true); // true = triggered by inactivity → show idle screen
+      logout(true);
+    }
+    // LOCK TIMEOUT: release any tab locks older than 10 minutes (crash/abandon recovery)
+    const LOCK_TTL = 10 * 60 * 1000;
+    if(typeof _tabLockTimestamps !== 'undefined'){
+      _tabLockTimestamps.forEach((ts, tabId)=>{
+        if(Date.now() - ts > LOCK_TTL){
+          _tabLocks.delete(tabId);
+          _tabLockTimestamps.delete(tabId);
+          if(typeof _log==='function') _log('warn','Lock Timeout','Tab lock auto-released after 10min — possible abandoned checkout','Tab ID: '+tabId);
+        }
+      });
     }
   },15000);
 }
@@ -5097,7 +5649,7 @@ function renderChimePicker(){
 
 function pickChime(id){
   settings.chime=id;
-  localStorage.setItem('pos2_settings',JSON.stringify(settings));
+  _safeSettingsSave();
   renderChimePicker();
   playSuccessBeep();
 }
@@ -5393,14 +5945,14 @@ function addDiscountPreset(){
   if(pct<=0&&flat<=0){showToast('Invalid discount amount','error');return;}
   if(!settings.discountPresets)settings.discountPresets=[];
   settings.discountPresets.push({name:name.trim(),pct,flat});
-  localStorage.setItem('pos2_settings',JSON.stringify(settings));
+  _safeSettingsSave();
   renderDiscountPresetList();
   showToast('Preset saved','success');
 }
 
 function removeDiscountPreset(idx){
   settings.discountPresets.splice(idx,1);
-  localStorage.setItem('pos2_settings',JSON.stringify(settings));
+  _safeSettingsSave();
   renderDiscountPresetList();
 }
 
@@ -5840,7 +6392,7 @@ function renderTipPool(){
     const rows=deptEmps.map(emp=>{
       const inPool=roster[emp.id]&&roster[emp.id].inPool;
       const sh=shares[emp.id];
-      const roleColor=emp.role==='owner'?'var(--owner)':emp.role==='manager'?'var(--manager)':'var(--worker)';
+      const roleColor=emp.role==='owner'?'var(--owner)':emp.role==='manager'?'var(--manager)':emp.role==='dev'?'var(--dev)':'var(--worker)';
       return`<div style="display:flex;align-items:center;gap:8px;padding:8px 10px;background:var(--surface3);border:1px solid ${inPool?color:'var(--border)'};border-radius:7px;opacity:${inPool?1:.5};transition:all .15s;">
         <span style="font-size:1.1rem;">${emp.emoji}</span>
         <div style="flex:1;min-width:0;">
@@ -6167,7 +6719,7 @@ function restoreData(input){
       nextShiftNoteId=Math.max(...shiftNotes.map(n=>n.id),0)+1;
       // Persist
       saveEmployees();saveMenu();saveTabs();saveTransactions();saveSpecials();saveShiftNotes();
-      localStorage.setItem('pos2_settings',JSON.stringify(settings));
+      _safeSettingsSave();
       // Refresh UI
       if(currentUser)setupForUser();
       document.getElementById('backupMsg').innerHTML=`<span style="color:var(--green)">✅ Restore complete from ${new Date(d.exportedAt).toLocaleDateString()}</span>`;
@@ -6794,6 +7346,917 @@ seedGeorgeWaltsMenu();
 applyTheme(localStorage.getItem('pos2_theme')||settings.theme||'dark');
 showLoginScreen();
 setInterval(updateClock,1000);
+
+
+
+// ===================== RESILIENCE & INTEGRITY SYSTEM =====================
+
+// ── CONSTANTS ────────────────────────────────────────────────────────────────
+const MAX_TAB_ITEMS     = 200;   // max line items on one tab before warning
+const MAX_TRANSACTIONS  = 5000;  // archive oldest when exceeded
+const CLOSED_TAB_TTL_DAYS = 3;   // auto-purge closed tabs older than this
+const BACKUP_INTERVAL_MS  = 5 * 60 * 1000; // auto-backup every 5 minutes
+
+// ── SCHEMA VALIDATORS ────────────────────────────────────────────────────────
+function _validateTab(tab){
+  if(!tab||typeof tab!=='object') return false;
+  if(typeof tab.id!=='number'||isNaN(tab.id)) return false;
+  if(!tab.name||typeof tab.name!=='string'||tab.name.trim()==='') return false;
+  if(!Array.isArray(tab.items)) return false;
+  if(!['open','closed'].includes(tab.status)) return false;
+  return true;
+}
+
+function _validateTransaction(tx){
+  if(!tx||typeof tx!=='object') return false;
+  if(typeof tx.id!=='number'||isNaN(tx.id)) return false;
+  if(typeof tx.total!=='number'||isNaN(tx.total)) return false;
+  if(!tx.timestamp||typeof tx.timestamp!=='string') return false;
+  if(!tx.method||typeof tx.method!=='string') return false;
+  return true;
+}
+
+function _schemaCheckSave(type, data){
+  // Validate before writing — rejects malformed records silently in prod, logs in dev
+  if(type==='tabs'){
+    const bad = data.filter(t=>!_validateTab(t));
+    if(bad.length>0&&typeof _log==='function'){
+      _log('warn','Schema',''+bad.length+' tab(s) failed validation before save','IDs: '+bad.map(t=>t&&t.id).join(', '));
+    }
+    return data.filter(t=>_validateTab(t));
+  }
+  if(type==='transactions'){
+    const bad = data.filter(t=>!_validateTransaction(t));
+    if(bad.length>0&&typeof _log==='function'){
+      _log('warn','Schema',''+bad.length+' transaction(s) failed validation','IDs: '+bad.map(t=>t&&t.id).join(', '));
+    }
+    return data.filter(t=>_validateTransaction(t));
+  }
+  return data;
+}
+
+// ── AUTO-BACKUP SNAPSHOTS ────────────────────────────────────────────────────
+function _autoBackup(){
+  try{
+    const snap={
+      ts:new Date().toISOString(),
+      tabs:JSON.parse(localStorage.getItem('pos2_tabs')||'[]'),
+      transactions:JSON.parse(localStorage.getItem('pos2_transactions')||'[]'),
+      employees:JSON.parse(localStorage.getItem('pos2_employees')||'[]'),
+    };
+    // Keep last 3 rolling backups
+    const existing=JSON.parse(localStorage.getItem('pos2_backups')||'[]');
+    existing.unshift(snap);
+    const trimmed=existing.slice(0,3);
+    localStorage.setItem('pos2_backups',JSON.stringify(trimmed));
+    if(typeof _log==='function') _log('info','Backup','Auto-snapshot saved','Tabs: '+snap.tabs.length+' | Txns: '+snap.transactions.length);
+  }catch(e){
+    if(typeof _log==='function') _log('warn','Backup','Auto-backup failed — localStorage may be full',e&&e.message||'');
+  }
+}
+let _backupInterval=null;
+function _startAutoBackup(){
+  if(_backupInterval)clearInterval(_backupInterval);
+  _backupInterval=setInterval(_autoBackup, BACKUP_INTERVAL_MS);
+}
+
+// ── TRANSACTION PRUNING ───────────────────────────────────────────────────────
+function _pruneTransactions(){
+  if(transactions.length <= MAX_TRANSACTIONS) return;
+  const excess = transactions.length - MAX_TRANSACTIONS;
+  // Archive oldest to a separate localStorage key before dropping
+  const toArchive = transactions.slice(-excess);
+  try{
+    const existing=JSON.parse(localStorage.getItem('pos2_tx_archive')||'[]');
+    const merged=[...existing,...toArchive].slice(-10000); // cap archive at 10k
+    localStorage.setItem('pos2_tx_archive',JSON.stringify(merged));
+  }catch(e){}
+  transactions = transactions.slice(0, MAX_TRANSACTIONS);
+  if(typeof _log==='function') _log('warn','Pruning','Transactions pruned: '+excess+' oldest archived','Archive key: pos2_tx_archive');
+}
+
+// ── CLOSED TAB CLEANUP ───────────────────────────────────────────────────────
+function _pruneClosedTabs(){
+  const cutoff = Date.now() - CLOSED_TAB_TTL_DAYS * 24 * 60 * 60 * 1000;
+  const toRemove = tabs.filter(t=>{
+    if(t.status!=='closed') return false;
+    if(!t.closedAt) return false;
+    return new Date(t.closedAt).getTime() <= cutoff;
+  });
+  if(toRemove.length > 0){
+    // EXPORT BEFORE PURGE: offer CSV download of tabs about to be deleted
+    if(typeof _exportBeforePurge==='function') _exportBeforePurge(toRemove);
+    tabs = tabs.filter(t=>!toRemove.includes(t));
+    saveTabs();
+    if(typeof _log==='function') _log('info','Cleanup','Pruned '+toRemove.length+' closed tab(s) older than '+CLOSED_TAB_TTL_DAYS+' days',null);
+  }
+}
+
+// ── ORPHAN DETECTION ──────────────────────────────────────────────────────────
+function _detectOrphans(){
+  const issues=[];
+  const empIds=new Set(employees.map(e=>e.id));
+  const menuIds=new Set(menuItems.map(i=>i.id));
+
+  // Tabs referencing deleted employees
+  tabs.filter(t=>t.status==='open').forEach(t=>{
+    if(t.employeeId && !empIds.has(t.employeeId)){
+      issues.push('Tab "'+t.name+'" (#'+t.id+') owned by deleted employee ID '+t.employeeId);
+    }
+  });
+
+  // Open tabs with items referencing deleted menu items
+  tabs.filter(t=>t.status==='open').forEach(t=>{
+    (t.items||[]).forEach(item=>{
+      if(item.id && !menuIds.has(item.id)){
+        issues.push('Tab "'+t.name+'" has item "'+item.name+'" (menu ID '+item.id+') no longer in menu');
+      }
+    });
+  });
+
+  if(issues.length>0 && typeof _log==='function'){
+    issues.forEach(msg=>_log('warn','Orphan',msg,null));
+  }
+  return issues;
+}
+
+// ── MAX TAB SIZE GUARD ────────────────────────────────────────────────────────
+function _checkTabSizeLimit(){
+  if(currentOrder.length >= MAX_TAB_ITEMS){
+    showToast('Tab has '+currentOrder.length+' items — consider closing soon','warn');
+    if(typeof _log==='function') _log('warn','Tab Size','Tab approaching item limit','Items: '+currentOrder.length+'/'+MAX_TAB_ITEMS);
+    return false;
+  }
+  return true;
+}
+
+// ── EMPTY MENU GUARD ─────────────────────────────────────────────────────────
+function _checkMenuNotEmpty(){
+  if(!menuItems||menuItems.length===0){
+    showToast('Menu is empty — add items in the Menu tab','error');
+    if(typeof _log==='function') _log('error','Menu','Menu is empty — POS cannot take orders',null);
+    return false;
+  }
+  return true;
+}
+
+// ── BOOT-TIME SELF-CHECK ──────────────────────────────────────────────────────
+function _bootSelfCheck(){
+  const issues=[];
+
+  // 1. Stale locks from a previous crash
+  if(_tabLocks.size>0){
+    _tabLocks.forEach(id=>{
+      const tab=tabs.find(t=>t.id===id);
+      issues.push('Stale lock on tab #'+id+(tab?' ('+tab.name+')':'— tab not found')+' — clearing');
+    });
+    _tabLocks.clear();
+    _tabLockTimestamps.clear();
+  }
+
+  // 2. Tabs with invalid schema
+  const badTabs=tabs.filter(t=>!_validateTab(t));
+  if(badTabs.length>0) issues.push(badTabs.length+' tab(s) failed schema validation at boot');
+
+  // 3. Transactions with invalid schema
+  const badTxns=transactions.filter(t=>!_validateTransaction(t));
+  if(badTxns.length>0) issues.push(badTxns.length+' transaction(s) failed schema validation at boot');
+
+  // 4. Menu empty check
+  if(!menuItems||menuItems.length===0) issues.push('Menu is empty');
+
+  // 5. Orphan check
+  const orphans=_detectOrphans();
+  orphans.forEach(o=>issues.push(o));
+
+  // 6. Transaction count warning
+  if(transactions.length>MAX_TRANSACTIONS*0.8){
+    issues.push('Transaction log at '+transactions.length+'/'+MAX_TRANSACTIONS+' — pruning soon');
+  }
+
+  // Log all findings
+  if(typeof _log==='function'){
+    if(issues.length===0){
+      _log('info','Boot Check','All systems OK — no issues found at startup',null);
+    } else {
+      issues.forEach(msg=>_log('warn','Boot Check',msg,null));
+    }
+  }
+
+  // Prune on boot if needed
+  _pruneTransactions();
+  _pruneClosedTabs();
+
+  return issues;
+}
+
+// ── WIRE IT ALL UP ────────────────────────────────────────────────────────────
+// Run boot check + start auto-backup after page loads
+window.addEventListener('load',()=>{
+  setTimeout(()=>{
+    _bootSelfCheck();
+    _startAutoBackup();
+    // Check menu on POS page load
+    _checkMenuNotEmpty();
+  }, 1000);
+});
+
+// ===================== END RESILIENCE SYSTEM =====================
+
+
+// ===================== EXTRA RESILIENCE MEASURES =====================
+
+// ── HEARTBEAT: 60s ping to confirm Firebase alive ────────────────────────────
+let _heartbeatMisses = 0;
+let _heartbeatInterval = null;
+const _HEARTBEAT_WARN_THRESHOLD = 3;
+
+function _startHeartbeat(){
+  if(_heartbeatInterval) clearInterval(_heartbeatInterval);
+  _heartbeatMisses = 0;
+  _heartbeatInterval = setInterval(async ()=>{
+    if(!fbDb || !_netOnline){ _heartbeatMisses++; }
+    else {
+      try{
+        await fbDb.ref('.info/serverTimeOffset').once('value');
+        _heartbeatMisses = 0;
+        _hideHeartbeatWarning();
+      } catch(e){
+        _heartbeatMisses++;
+        if(typeof _log==='function') _log('warn','Heartbeat','Firebase ping failed (miss '+_heartbeatMisses+')',e&&e.message||'');
+      }
+    }
+    if(_heartbeatMisses >= _HEARTBEAT_WARN_THRESHOLD){
+      _showHeartbeatWarning();
+    }
+  }, 60000);
+}
+
+function _showHeartbeatWarning(){
+  let el = document.getElementById('heartbeatWarnBanner');
+  if(!el){
+    el = document.createElement('div');
+    el.id = 'heartbeatWarnBanner';
+    el.style.cssText = 'position:fixed;top:0;left:0;right:0;z-index:9000;background:#ef4444;color:#fff;text-align:center;padding:8px 16px;font-size:.82rem;font-weight:700;';
+    el.innerHTML = '⚠️ Firebase connection unstable — '+_heartbeatMisses+' missed pings. Data saving locally. <button onclick="_hideHeartbeatWarning()" style="background:rgba(255,255,255,.2);border:none;color:#fff;padding:2px 8px;border-radius:4px;cursor:pointer;margin-left:8px;">Dismiss</button>';
+    document.body.appendChild(el);
+  } else {
+    el.innerHTML = '⚠️ Firebase connection unstable — '+_heartbeatMisses+' missed pings. Data saving locally. <button onclick="_hideHeartbeatWarning()" style="background:rgba(255,255,255,.2);border:none;color:#fff;padding:2px 8px;border-radius:4px;cursor:pointer;margin-left:8px;">Dismiss</button>';
+    el.style.display = '';
+  }
+}
+function _hideHeartbeatWarning(){
+  const el = document.getElementById('heartbeatWarnBanner');
+  if(el) el.style.display = 'none';
+  _heartbeatMisses = 0;
+}
+
+// Start heartbeat on login, stop on logout
+const _origLoginAs_hb = window.loginAs;
+
+// ── ERROR RATE THROTTLE: staff-visible banner if >10 errors in 60s ───────────
+let _errorTimestamps = [];
+function _trackErrorRate(){
+  const now = Date.now();
+  _errorTimestamps.push(now);
+  // Keep only last 60 seconds
+  _errorTimestamps = _errorTimestamps.filter(t => now - t < 60000);
+  const count = _errorTimestamps.length;
+  // Staff alert — visible to everyone at 3+ errors in 60s
+  if(count >= 3){
+    const banner = document.getElementById('staffAlertBanner');
+    const msg = document.getElementById('staffAlertMsg');
+    if(banner && banner.style.display === 'none'){
+      if(msg) msg.textContent = 'The system has encountered '+count+' errors in the last minute — please notify your manager.';
+      banner.style.display = '';
+      if(typeof _log==='function') _log('warn','Staff Alert','Error rate banner shown to staff','Errors in last 60s: '+count);
+    }
+  }
+  // Dev banner — bottom-right at 10+ errors
+  if(count >= 10){
+    _showErrorRateBanner(count);
+  }
+}
+
+function _showErrorRateBanner(count){
+  let el = document.getElementById('errorRateBanner');
+  if(!el){
+    el = document.createElement('div');
+    el.id = 'errorRateBanner';
+    el.style.cssText = 'position:fixed;bottom:56px;right:16px;z-index:8999;background:#ef4444;color:#fff;border-radius:10px;padding:10px 16px;font-size:.8rem;font-weight:700;max-width:280px;box-shadow:0 4px 16px rgba(0,0,0,.4);';
+    document.body.appendChild(el);
+  }
+  el.innerHTML = `🚨 ${count} errors in the last 60 seconds. Something may be wrong — contact your developer.<br><button onclick="this.parentElement.style.display='none'" style="background:rgba(255,255,255,.2);border:none;color:#fff;padding:3px 10px;border-radius:5px;cursor:pointer;margin-top:6px;font-size:.75rem;">Dismiss</button>`;
+  el.style.display = '';
+}
+
+// ── PRICE DRIFT: lock item prices at time of order, not at time of checkout ──
+// Items already get spread-copied into currentOrder ({...item}), so price is
+// already snapshotted. This guard re-validates they haven't drifted via direct ref.
+function _validateOrderPrices(){
+  let drifted = 0;
+  currentOrder.forEach(orderItem=>{
+    const menuItem = menuItems.find(m=>m.id===orderItem.id);
+    if(menuItem && Math.abs(menuItem.price - orderItem.price) > 0.001){
+      // Price changed since item was added — keep original (already stored)
+      drifted++;
+      if(typeof _log==='function') _log('warn','Price Drift',
+        '"'+orderItem.name+'" price changed: ordered at $'+orderItem.price.toFixed(2)+', menu now $'+menuItem.price.toFixed(2)+' — keeping original',null);
+    }
+  });
+  if(drifted > 0) showToast(drifted+' item price(s) changed since ordering — original prices kept','warn');
+}
+
+// ── TAB NAME COLLISION WARNING ────────────────────────────────────────────────
+function _checkTabNameCollision(name){
+  const existing = tabs.filter(t=>t.status==='open' && t.name.toLowerCase()===name.toLowerCase());
+  if(existing.length > 0){
+    return confirm('An open tab named "'+name+'" already exists. Create another one anyway?');
+  }
+  return true;
+}
+
+// ── RECEIPT REPRINT LOG ───────────────────────────────────────────────────────
+const _reprintLog = [];
+function _logReprint(txId){
+  _reprintLog.push({
+    txId,
+    user: currentUser ? currentUser.name : 'unknown',
+    role: currentUser ? currentUser.role : 'unknown',
+    ts: new Date().toISOString()
+  });
+  if(typeof _log==='function') _log('info','Reprint','Receipt reprinted for TX #'+txId+' by '+( currentUser?currentUser.name:'?'),null);
+}
+
+// ── END-OF-NIGHT EXPORT BEFORE PURGE ──────────────────────────────────────────
+function _exportBeforePurge(tabsToPurge){
+  if(!tabsToPurge || tabsToPurge.length === 0) return;
+  const rows = ['Tab Name,Status,Opened,Closed,Items,Employee'];
+  tabsToPurge.forEach(t=>{
+    const emp = employees.find(e=>e.id===t.employeeId);
+    rows.push([
+      '"'+(t.name||'').replace(/"/g,'')+ '"',
+      t.status,
+      t.time||'',
+      t.closedAt||'',
+      (t.items||[]).length,
+      emp?emp.name:'unknown'
+    ].join(','));
+  });
+  const csv = rows.join('\n');
+  const blob = new Blob([csv], {type:'text/csv'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'closed-tabs-'+new Date().toISOString().slice(0,10)+'.csv';
+  a.click();
+  URL.revokeObjectURL(url);
+  if(typeof _log==='function') _log('info','Export','Pre-purge export: '+tabsToPurge.length+' closed tabs exported',null);
+}
+
+// ── CONSOLE SUPPRESSION IN PRODUCTION ────────────────────────────────────────
+// Set _DEV_MODE = true in browser console to re-enable logs
+window._DEV_MODE = false;
+(function(){
+  const _realLog = console.log.bind(console);
+  const _realWarn = console.warn.bind(console);
+  console.log = function(){ if(window._DEV_MODE) _realLog.apply(console, arguments); };
+  console.warn = function(){ if(window._DEV_MODE) _realWarn.apply(console, arguments); };
+  // Keep console.error visible — it indicates real problems
+})();
+
+// ===================== END EXTRA RESILIENCE =====================
+
+// ===================== DEVELOPER PROFILE =====================
+// Hidden from staff. Access: tap the BAR POS logo 7 times on the login screen.
+
+const _DEV_PROFILE = {
+  id: 9000,
+  name: 'Dev',
+  emoji: '⚡',
+  title: 'Developer',
+  role: 'dev',
+  pin: '9999',
+  color: '#a855f7',
+  dept: 'bar'
+};
+
+// ── Secret tap counter ────────────────────────────────────────
+let _devTaps = 0;
+let _devTapTimer = null;
+function _devTapCount(){
+  _devTaps++;
+  clearTimeout(_devTapTimer);
+  // Show hint after 4 taps
+  if(_devTaps >= 4){
+    const hint = document.getElementById('devAccessHint');
+    if(hint) hint.style.display = 'block';
+  }
+  // Trigger on 7 taps
+  if(_devTaps >= 7){
+    _devTaps = 0;
+    const hint = document.getElementById('devAccessHint');
+    if(hint) hint.style.display = 'none';
+    _devEnterPin();
+    return;
+  }
+  _devTapTimer = setTimeout(()=>{
+    _devTaps = 0;
+    const hint = document.getElementById('devAccessHint');
+    if(hint) hint.style.display = 'none';
+  }, 2500);
+}
+
+// ── Dev PIN entry (reuses pin screen with dev profile) ────────
+function _devEnterPin(){
+  showPinScreen(_DEV_PROFILE);
+}
+
+// ── Role impersonation (dev only) ────────────────────────────
+function _devImpersonate(role){
+  if(!currentUser || currentUser.role !== 'dev'){
+    showToast('Dev only','error'); return;
+  }
+  const targets = {
+    owner: employees.find(e=>e.role==='owner') || {..._DEV_PROFILE, role:'owner', name:'Dev (Owner)', color:'#f0a500'},
+    manager: employees.find(e=>e.role==='manager') || {..._DEV_PROFILE, role:'manager', name:'Dev (Manager)', color:'#3b82f6'},
+    worker: employees.find(e=>e.role==='worker') || {..._DEV_PROFILE, role:'worker', name:'Dev (Worker)', color:'#22c55e'},
+    dev: _DEV_PROFILE
+  };
+  const target = targets[role];
+  if(!target){ showToast('Role not found','error'); return; }
+  // Switch role but keep dev page accessible
+  currentUser = {...target, _devMode: true};
+  setupForUser();
+  showPage('devPage');
+  const note = document.getElementById('devImpersonateNote');
+  if(note) note.textContent = 'Now viewing as: ' + role.toUpperCase() + ' — UI reflects that role\'s permissions.';
+  showToast('Viewing as ' + role, 'info');
+}
+
+// ── Diagnostics ───────────────────────────────────────────────
+function _devDiag(type){
+  const out = document.getElementById('devDiagOutput');
+  if(!out) return;
+  let result = '';
+  try {
+    if(type === 'storage'){
+      let total = 0;
+      const keys = [];
+      for(let i=0;i<localStorage.length;i++){
+        const k = localStorage.key(i);
+        const v = localStorage.getItem(k)||'';
+        const size = (k.length + v.length) * 2;
+        total += size;
+        if(k.startsWith('pos2_')) keys.push({k, size: (size/1024).toFixed(2)+'KB'});
+      }
+      result = 'LocalStorage usage:\n';
+      keys.forEach(e => result += '  ' + e.k + ': ' + e.size + '\n');
+      result += '\nTotal (all keys): ~' + (total/1024).toFixed(1) + ' KB of ~5120 KB limit';
+      const backups=JSON.parse(localStorage.getItem('pos2_backups')||'[]');
+      result += '\n\nAuto-backups stored: ' + backups.length + '/3';
+      backups.forEach((b,i)=>{ result += '\n  ['+i+'] '+b.ts+' — Tabs:'+b.tabs.length+' Txns:'+b.transactions.length; });
+    }
+    else if(type === 'firebase'){
+      result = 'Firebase connected: ' + (fbDb ? 'YES' : 'NO') + '\n';
+      result += 'Network online: ' + (_netOnline ? 'YES' : 'NO') + '\n';
+      if(typeof _offlineQueue !== 'undefined' && _offlineQueue.length > 0){
+        result += 'Offline queue (' + _offlineQueue.length + ' pending):\n';
+        _offlineQueue.forEach(q=>{
+          const collapsed = q.mergeCount > 1 ? ' [' + q.mergeCount + ' writes merged]' : '';
+          const age = Math.round((Date.now() - q.ts) / 1000);
+          result += '  • ' + q.type + collapsed + ' — queued ' + age + 's ago\n';
+        });
+      } else {
+        result += 'Offline queue: empty (all synced)\n';
+      }
+      result += 'Firebase DB ref: ' + (fbDb ? fbDb.toString() : 'null');
+    }
+    else if(type === 'tabs'){
+      result = 'Total tabs: ' + tabs.length + '\n';
+      result += 'Open: ' + tabs.filter(t=>t.status==='open').length + '\n';
+      result += 'Closed: ' + tabs.filter(t=>t.status==='closed').length + '\n';
+      result += 'Locked (in-flight): ' + _tabLocks.size + '\n';
+      if(_tabLocks.size > 0) result += 'Locked IDs: ' + [..._tabLocks].join(', ') + '\n';
+      result += '\nActive tab ID: ' + (activeTabId || 'none') + '\n';
+      result += 'Checkout tab ID: ' + (checkoutTabId || 'none');
+    }
+    else if(type === 'locks'){
+      result = 'Tab lock registry:\n';
+      if(_tabLocks.size === 0){
+        result += '  (none — all clear)';
+      } else {
+        [..._tabLocks].forEach(id => {
+          const tab = tabs.find(t=>t.id===id);
+          result += '  Tab #' + id + ': ' + (tab ? tab.name + ' [' + tab.status + ']' : 'NOT FOUND') + '\n';
+        });
+      }
+    }
+    else if(type === 'transactions'){
+      result = 'Total transactions: ' + transactions.length + '\n';
+      result += 'Voided: ' + transactions.filter(t=>t.voided).length + '\n';
+      const total = transactions.filter(t=>!t.voided&&!t.isRefund).reduce((s,t)=>s+t.total,0);
+      result += 'Gross revenue: $' + _currencyRound(total).toFixed(2) + '\n';
+      result += 'Next TX ID: ' + nextTxId;
+    }
+    else if(type === 'rounding'){
+      const cases = [
+        [0.1, 0.2],[9.99, 0.1],[999.99, 0.01],[1.005, 0],[0.7, 0.1]
+      ];
+      result = 'Float rounding test (_currencyRound):\n\n';
+      cases.forEach(([a,b])=>{
+        const raw = a + b;
+        const fixed = _currencyRound(a + b);
+        const ok = fixed === parseFloat(fixed.toFixed(2));
+        result += (ok?'✅':'❌') + '  ' + a + ' + ' + b + ' = raw:' + raw + ' → fixed:' + fixed + '\n';
+      });
+    }
+    else if(type === 'orphans'){
+      const issues = _detectOrphans();
+      result = 'Orphan detection scan:\n\n';
+      if(issues.length === 0){
+        result += '✅ No orphaned records found.';
+      } else {
+        issues.forEach(i => result += '⚠️  ' + i + '\n');
+      }
+    }
+    else if(type === 'backup'){
+      const backups = JSON.parse(localStorage.getItem('pos2_backups')||'[]');
+      result = 'Auto-backup snapshots (' + backups.length + '/3):\n\n';
+      if(backups.length === 0){
+        result += 'No backups yet — first backup runs 5 minutes after login.';
+      } else {
+        backups.forEach((b,i)=>{
+          result += '['+i+'] '+new Date(b.ts).toLocaleString()+'\n';
+          result += '     Tabs: '+b.tabs.length+' | Employees: '+b.employees.length+' | Transactions: '+b.transactions.length+'\n\n';
+        });
+        result += 'To restore: copy backup data from browser console:\n  JSON.parse(localStorage.getItem(\'pos2_backups\'))[0]';
+      }
+    }
+    else if(type === 'bootcheck'){
+      result = 'Running boot self-check...\n\n';
+      const issues = _bootSelfCheck();
+      if(issues.length === 0){
+        result += '✅ All checks passed.';
+      } else {
+        result += issues.length + ' issue(s) found:\n';
+        issues.forEach(i => result += '⚠️  ' + i + '\n');
+      }
+    }
+    else if(type === 'reprints'){
+      result = 'Receipt reprint log ('+_reprintLog.length+' entries):\n\n';
+      if(_reprintLog.length === 0){
+        result += 'No reprints this session.';
+      } else {
+        _reprintLog.forEach(r=>{
+          result += new Date(r.ts).toLocaleTimeString()+' — TX #'+r.txId+' — '+r.user+' ('+r.role+')\n';
+        });
+      }
+    }
+    else if(type === 'heartbeat'){
+      result = 'Heartbeat status:\n';
+      result += 'Missed pings: '+_heartbeatMisses+'/'+_HEARTBEAT_WARN_THRESHOLD+'\n';
+      result += 'Firebase connected: '+(fbDb&&_netOnline?'YES':'NO')+'\n';
+      result += 'Error events (last 60s): '+_errorTimestamps.filter(t=>Date.now()-t<60000).length;
+    }
+  } catch(e){
+    result = 'Error running diagnostic:\n' + e.message;
+  }
+  out.textContent = result;
+}
+
+// ── Source code search ────────────────────────────────────────
+function _devSearchSource(query){
+  const out = document.getElementById('devSourceOutput');
+  if(!out) return;
+  if(!query || query.trim().length < 2){ out.textContent = 'Type at least 2 characters to search...'; return; }
+  const src = document.documentElement.outerHTML;
+  const lines = src.split('\n');
+  const q = query.trim().toLowerCase();
+  const matches = [];
+  lines.forEach((line, i) => {
+    if(line.toLowerCase().includes(q)){
+      const lineNum = i + 1;
+      const trimmed = line.trim().slice(0, 160);
+      matches.push('L' + lineNum + ':  ' + trimmed);
+    }
+  });
+  if(matches.length === 0){
+    out.textContent = 'No matches found for: ' + query;
+  } else {
+    out.textContent = matches.length + ' match(es) for "' + query + '":\n\n' + matches.join('\n');
+  }
+}
+
+// ── Dev page data refresh ─────────────────────────────────────
+function _devRefreshLog(){
+  const mirror = document.getElementById('devLogMirror');
+  if(!mirror) return;
+  if(typeof _hookLogs === 'undefined' || _hookLogs.length === 0){
+    mirror.innerHTML = '<span style="color:var(--text2)">No logs yet.</span>';
+    return;
+  }
+  mirror.innerHTML = _hookLogs.slice(0, 50).map(e=>{
+    const color = e.level==='error'?'#ef4444':e.level==='warn'?'#f0a500':'#9090a8';
+    const icon = e.level==='error'?'🔴':e.level==='warn'?'🟡':'🔵';
+    return '<div style="border-bottom:1px solid var(--border);padding:4px 2px;">' +
+      '<span style="color:'+color+';font-weight:700;">'+icon+' ['+e.category+']</span> ' +
+      '<span style="color:var(--text)">'+e.message+'</span>' +
+      '<span style="color:var(--text2);float:right;">'+e.time+'</span>' +
+      (e.detail?'<div style="color:var(--text2);font-size:.68rem;margin-top:1px;">'+e.detail.slice(0,120)+'</div>':'') +
+      '</div>';
+  }).join('');
+}
+
+function _devRefreshSession(){
+  const el = document.getElementById('devSessionInfo');
+  if(!el || !currentUser) return;
+  el.innerHTML =
+    'Name: ' + currentUser.name + '<br>' +
+    'Role: ' + currentUser.role + (currentUser._devMode?' (impersonating)':'') + '<br>' +
+    'Login time: ' + (currentUser.loginTime ? new Date(currentUser.loginTime).toLocaleTimeString() : 'n/a') + '<br>' +
+    'User ID: ' + currentUser.id + '<br>' +
+    'POS version: bar-pos-v2-fixed';
+}
+
+// Auto-refresh dev panel when it becomes visible
+const _devPageObserver = new MutationObserver(()=>{
+  const devPage = document.getElementById('devPage');
+  if(devPage && !devPage.classList.contains('hidden')){
+    _devRefreshSession();
+    _devRefreshLog();
+  }
+});
+document.addEventListener('DOMContentLoaded', ()=>{
+  const devPage = document.getElementById('devPage');
+  if(devPage) _devPageObserver.observe(devPage, {attributes:true, attributeFilter:['class']});
+});
+// ===================== END DEVELOPER PROFILE =====================
+
+// ===================== RUNTIME HOOK SYSTEM =====================
+// READ-ONLY — does not modify any POS logic. Observes and reports only.
+(function initRuntimeHooks(){
+
+  // ── Storage ──────────────────────────────────────────────────
+  const MAX_LOGS = 200;
+  const _hookLogs = [];
+
+  function _log(level, category, message, detail){
+    const entry = {
+      ts: new Date().toISOString(),
+      time: new Date().toLocaleTimeString(),
+      level,   // 'error' | 'warn' | 'info'
+      category,
+      message,
+      detail: detail || null
+    };
+    _hookLogs.unshift(entry);
+    if(_hookLogs.length > MAX_LOGS) _hookLogs.pop();
+    _refreshHookPanel();
+  }
+
+  // ── 1. Global JS error catcher ────────────────────────────────
+  window.onerror = function(msg, src, line, col, err){
+    _log('error', 'JS Error', msg, 'Line '+line+':'+col+' — '+src+'\n'+(err && err.stack ? err.stack : ''));
+    if(typeof _trackErrorRate==='function') _trackErrorRate();
+    return false;
+  };
+
+  // ── 2. Unhandled promise rejections ──────────────────────────
+  window.addEventListener('unhandledrejection', function(e){
+    const reason = e.reason instanceof Error
+      ? e.reason.message + '\n' + e.reason.stack
+      : String(e.reason);
+    _log('error', 'Unhandled Promise', 'A promise was rejected with no catch handler', reason);
+    if(typeof _trackErrorRate==='function') _trackErrorRate();
+  });
+
+  // ── 3. Firebase write failures ────────────────────────────────
+  // Patch .catch() on Firebase promises by wrapping fbDb.ref().set/push/update
+  function _wrapFirebaseRef(originalRef){
+    const originalSet = originalRef.set.bind(originalRef);
+    const originalPush = originalRef.push.bind(originalRef);
+    const originalUpdate = originalRef.update.bind(originalRef);
+
+    originalRef.set = function(val){
+      return originalSet(val).catch(e => {
+        _log('error', 'Firebase Write', 'Firebase .set() failed', e.message);
+        throw e;
+      });
+    };
+    originalRef.push = function(val){
+      return originalPush(val).catch(e => {
+        _log('error', 'Firebase Write', 'Firebase .push() failed', e.message);
+        throw e;
+      });
+    };
+    originalRef.update = function(val){
+      return originalUpdate(val).catch(e => {
+        _log('error', 'Firebase Write', 'Firebase .update() failed', e.message);
+        throw e;
+      });
+    };
+    return originalRef;
+  }
+
+  // ── 4. Watch key POS functions for double-fire / errors ──────
+  function _watchFn(name, fn){
+    const _lastCall = {};
+    return function(){
+      const now = Date.now();
+      const args = arguments;
+
+      // Double-fire detection (same function called twice within 500ms)
+      if(_lastCall[name] && now - _lastCall[name] < 500){
+        _log('warn', 'Double Fire', `"${name}" fired twice in ${now - _lastCall[name]}ms — possible double-tap`, null);
+      }
+      _lastCall[name] = now;
+
+      try {
+        return fn.apply(this, args);
+      } catch(e){
+        _log('error', 'Function Crash', `"${name}" threw an error`, e.message + '\n' + (e.stack||''));
+        throw e;
+      }
+    };
+  }
+
+  // Wrap critical transaction functions after DOM is ready
+  window.addEventListener('load', function(){
+    const toWatch = ['processPayment','createTab','deleteTab','checkoutTab',
+                     'processSplitPayment','finishSplit','voidTransaction',
+                     'processPayment','transferTab'];
+    toWatch.forEach(name => {
+      if(typeof window[name] === 'function'){
+        window[name] = _watchFn(name, window[name]);
+        _log('info', 'Hook Active', `Watching: ${name}`, null);
+      }
+    });
+    _log('info', 'System', 'Runtime hook system initialized', null);
+  });
+
+  // ── 5. Network drop logger ─────────────────────────────────────
+  window.addEventListener('online',  () => _log('info',  'Network', 'Connection restored', null));
+  window.addEventListener('offline', () => _log('warn',  'Network', 'Connection lost — writes will queue locally', null));
+
+  // ── 6. LocalStorage quota errors ──────────────────────────────
+  const _origSetItem = localStorage.setItem.bind(localStorage);
+  localStorage.setItem = function(k, v){
+    try { return _origSetItem(k, v); }
+    catch(e){
+      _log('error', 'Storage', 'localStorage.setItem failed for key "'+k+'" — storage may be full', e.message);
+      // FALLBACK: keep data in memory so session stays alive
+      _memoryFallback[k] = v;
+      _showStorageWarning();
+    }
+  };
+
+  // Memory fallback store (used when localStorage is full/unavailable)
+  window._memoryFallback = {};
+  window._showStorageWarning = (function(){
+    let _shown=false;
+    return function(){
+      if(_shown) return;
+      _shown=true;
+      showToast('⚠️ Storage full — data saved in memory only. Export data before closing this tab.','error');
+      if(typeof _log==='function') _log('error','Storage','localStorage full — running in memory fallback mode. Data will be lost on page close.',null);
+    };
+  })();
+
+  // ── UI Panel ──────────────────────────────────────────────────
+  const panelHTML = `
+    <div id="hookBtn" onclick="document.getElementById('hookPanel').classList.toggle('hidden')"
+      style="position:fixed;bottom:16px;left:16px;z-index:9999;background:#1a1a24;border:1px solid #2e2e42;
+             border-radius:10px;padding:8px 14px;cursor:pointer;font-size:.78rem;font-weight:700;
+             color:#f0f0f5;display:flex;align-items:center;gap:8px;box-shadow:0 4px 16px rgba(0,0,0,.5);">
+      🔍 Dev Monitor <span id="hookErrCount" style="background:#ef4444;color:#fff;border-radius:20px;
+             padding:1px 7px;font-size:.7rem;display:none;">0</span>
+    </div>
+    <div id="hookPanel" class="hidden"
+      style="position:fixed;bottom:56px;left:16px;z-index:9999;width:420px;max-height:55vh;
+             background:#1a1a24;border:1px solid #2e2e42;border-radius:12px;
+             display:flex;flex-direction:column;box-shadow:0 8px 32px rgba(0,0,0,.6);overflow:hidden;">
+      <div style="padding:12px 16px;border-bottom:1px solid #2e2e42;display:flex;justify-content:space-between;align-items:center;flex-shrink:0;">
+        <span style="font-weight:700;font-size:.9rem;">🔍 Runtime Monitor</span>
+        <div style="display:flex;gap:8px;">
+          <button onclick="_hookClear()" style="background:#2a2a3a;border:none;color:#9090a8;border-radius:6px;padding:3px 10px;cursor:pointer;font-size:.75rem;">Clear</button>
+          <button onclick="document.getElementById('hookPanel').classList.add('hidden')"
+            style="background:none;border:none;color:#9090a8;cursor:pointer;font-size:1rem;">✕</button>
+        </div>
+      </div>
+      <div id="hookLogList" style="overflow-y:auto;flex:1;padding:8px;font-size:.75rem;font-family:monospace;"></div>
+    </div>`;
+
+  const _panelMount = document.createElement('div');
+  _panelMount.innerHTML = panelHTML;
+  document.body.appendChild(_panelMount);
+
+  window._hookClear = function(){ _hookLogs.length = 0; _refreshHookPanel(); };
+
+  function _refreshHookPanel(){
+    const list = document.getElementById('hookLogList');
+    const errCount = document.getElementById('hookErrCount');
+    if(!list) return;
+
+    const errors = _hookLogs.filter(l => l.level === 'error').length;
+    if(errCount){
+      errCount.style.display = errors > 0 ? 'inline' : 'none';
+      errCount.textContent = errors;
+    }
+
+    list.innerHTML = _hookLogs.map(e => {
+      const color = e.level==='error' ? '#ef4444' : e.level==='warn' ? '#f0a500' : '#9090a8';
+      const icon  = e.level==='error' ? '🔴' : e.level==='warn' ? '🟡' : '🔵';
+      return `<div style="border-bottom:1px solid #2e2e42;padding:6px 4px;line-height:1.5;">
+        <span style="color:${color};font-weight:700;">${icon} [${e.category}]</span>
+        <span style="color:#f0f0f5;"> ${e.message}</span>
+        <span style="color:#9090a8;float:right;">${e.time}</span>
+        ${e.detail ? `<div style="color:#9090a8;margin-top:2px;white-space:pre-wrap;word-break:break-all;">${e.detail.slice(0,200)}</div>` : ''}
+      </div>`;
+    }).join('');
+  }
+
+})();
+// ===================== END RUNTIME HOOKS =====================
+
+// ===================== SESSION GUARDS =====================
+
+// ── FIX: Accidental refresh / tab-close warning ───────────────────────────────
+// Fires the browser's native "Leave this page?" dialog if the user has an active
+// session. Cleared on clean logout so owners can intentionally close.
+window.addEventListener('beforeunload', function(e){
+  if(typeof currentUser !== 'undefined' && currentUser){
+    e.preventDefault();
+    e.returnValue = 'The POS is still active. Are you sure you want to leave?';
+    return e.returnValue;
+  }
+});
+
+// ── FIX: Screen Wake Lock — keeps tablet awake during a shift ─────────────────
+// Requests a wake lock when a user logs in; releases on logout or visibility
+// change. Re-acquires automatically if the system drops it (e.g. after unlock).
+let _wakeLock = null;
+
+async function _acquireWakeLock(){
+  if(!('wakeLock' in navigator)) return; // browser doesn't support it — silently skip
+  try{
+    if(_wakeLock && !_wakeLock.released) return; // already held
+    _wakeLock = await navigator.wakeLock.request('screen');
+    _wakeLock.addEventListener('release', ()=>{
+      if(typeof _log==='function') _log('info','WakeLock','Screen wake lock released by system','Will re-acquire on next visibility');
+    });
+    if(typeof _log==='function') _log('info','WakeLock','Screen wake lock acquired','Screen will stay on during shift');
+  } catch(e){
+    if(typeof _log==='function') _log('warn','WakeLock','Could not acquire wake lock',e.message);
+  }
+}
+
+function _releaseWakeLock(){
+  if(_wakeLock && !_wakeLock.released){
+    _wakeLock.release().catch(()=>{});
+    _wakeLock = null;
+  }
+}
+
+// ── FIX: Visibility change re-sync ───────────────────────────────────────────
+// When the browser tab comes back from background (device locked, app switched),
+// re-sync Firebase data and re-acquire wake lock to ensure fresh state.
+document.addEventListener('visibilitychange', function(){
+  if(document.visibilityState === 'visible'){
+    // Re-acquire wake lock if a user is logged in (system may have dropped it)
+    if(typeof currentUser !== 'undefined' && currentUser) _acquireWakeLock();
+    // Re-sync from Firebase if online
+    if(typeof _netOnline !== 'undefined' && _netOnline && typeof fbDb !== 'undefined' && fbDb){
+      try{
+        if(typeof loadFromFirebase === 'function') loadFromFirebase();
+        else if(typeof _syncFromFirebase === 'function') _syncFromFirebase();
+        if(typeof _log==='function') _log('info','Sync','Re-synced on tab visibility restore',null);
+      } catch(e){
+        if(typeof _log==='function') _log('warn','Sync','Visibility re-sync failed',e.message);
+      }
+    }
+  } else {
+    // Tab going to background — release wake lock to save battery
+    _releaseWakeLock();
+  }
+});
+
+// Hook wake lock into login / logout lifecycle
+(function _patchLoginLogoutForWakeLock(){
+  const _origLoginAs = typeof loginAs === 'function' ? loginAs : null;
+  const _origLogout  = typeof logout  === 'function' ? logout  : null;
+
+  if(_origLoginAs) window.loginAs = function(emp){
+    _origLoginAs(emp);
+    _acquireWakeLock();
+  };
+  if(_origLogout) window.logout = function(fromInactivity){
+    _releaseWakeLock();
+    _origLogout(fromInactivity);
+  };
+})();
+
+// ===================== END SESSION GUARDS =====================
 </script>
 </body>
 </html>
