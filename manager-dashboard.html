@@ -1,0 +1,654 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>📊 Manager Dashboard</title>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
+<style>
+:root {
+  --bg:#0f0f13;--surface:#1a1a24;--surface2:#22222f;--surface3:#2a2a3a;
+  --accent:#f0a500;--green:#22c55e;--red:#ef4444;--blue:#3b82f6;
+  --text:#f0f0f5;--text2:#9090a8;--border:#2e2e42;--radius:12px;
+  --manager:#3b82f6;
+}
+*{box-sizing:border-box;margin:0;padding:0;}
+body{background:var(--bg);color:var(--text);font-family:'Segoe UI',system-ui,sans-serif;min-height:100vh;overscroll-behavior:none;}
+
+/* ── SCREENS ── */
+.screen{display:none;min-height:100vh;align-items:center;justify-content:center;padding:24px;}
+.screen.active{display:flex;}
+
+/* ── SETUP SCREEN ── */
+.setup-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:32px;width:100%;max-width:480px;}
+.setup-card h1{font-size:1.4rem;color:var(--accent);margin-bottom:6px;}
+.setup-card p{font-size:.88rem;color:var(--text2);margin-bottom:20px;line-height:1.6;}
+.setup-card textarea{width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:12px;font-family:monospace;font-size:.8rem;resize:vertical;min-height:160px;outline:none;}
+.setup-card textarea:focus{border-color:var(--accent);}
+.btn{border:none;border-radius:8px;cursor:pointer;font-weight:700;padding:12px 24px;font-size:.95rem;transition:all .15s;width:100%;margin-top:12px;}
+.btn-accent{background:var(--accent);color:#1a1a2e;}
+.btn-accent:hover{opacity:.88;}
+.err{color:var(--red);font-size:.82rem;margin-top:8px;display:none;}
+
+/* ── PIN SCREEN ── */
+.pin-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:32px;width:100%;max-width:360px;text-align:center;}
+.pin-card h2{font-size:1.1rem;color:var(--text2);margin-bottom:4px;}
+.pin-card h1{font-size:1.5rem;color:var(--accent);margin-bottom:20px;}
+.pin-dots{display:flex;gap:12px;justify-content:center;margin-bottom:20px;}
+.pin-dot{width:16px;height:16px;border-radius:50%;background:var(--surface3);border:2px solid var(--border);transition:all .15s;}
+.pin-dot.filled{background:var(--accent);border-color:var(--accent);}
+.pin-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:12px;}
+.pin-btn{background:var(--surface2);border:1px solid var(--border);border-radius:10px;color:var(--text);font-size:1.3rem;font-weight:700;padding:16px;cursor:pointer;transition:all .15s;}
+.pin-btn:active{background:var(--surface3);transform:scale(.95);}
+.pin-error{color:var(--red);font-size:.82rem;min-height:20px;margin-bottom:8px;}
+.pin-back{background:none;border:none;color:var(--text2);font-size:.82rem;cursor:pointer;margin-top:8px;text-decoration:underline;}
+
+/* ── DASHBOARD ── */
+#dashScreen{display:none;flex-direction:column;min-height:100vh;}
+#dashScreen.active{display:flex;}
+.dash-header{background:var(--surface);border-bottom:1px solid var(--border);padding:14px 20px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:10;}
+.dash-header-left{display:flex;align-items:center;gap:12px;}
+.dash-title{font-size:1.1rem;font-weight:700;color:var(--accent);}
+.dash-subtitle{font-size:.78rem;color:var(--text2);}
+.badge-ro{background:rgba(59,130,246,.15);color:var(--manager);font-size:.7rem;font-weight:700;padding:3px 10px;border-radius:20px;border:1px solid rgba(59,130,246,.3);}
+.dash-user{font-size:.82rem;color:var(--text2);}
+.btn-logout{background:var(--surface2);border:1px solid var(--border);border-radius:8px;color:var(--text2);font-size:.78rem;padding:6px 14px;cursor:pointer;font-weight:600;}
+.btn-logout:hover{color:var(--red);border-color:var(--red);}
+
+.dash-body{padding:20px;display:flex;flex-direction:column;gap:20px;max-width:1100px;width:100%;margin:0 auto;}
+
+/* Stat row */
+.stat-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:14px;}
+.stat-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:18px 20px;}
+.stat-label{font-size:.75rem;color:var(--text2);font-weight:600;text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px;}
+.stat-value{font-size:1.9rem;font-weight:700;color:var(--accent);}
+.stat-value.green{color:var(--green);}
+.stat-value.blue{color:var(--blue);}
+.stat-sub{font-size:.75rem;color:var(--text2);margin-top:4px;}
+
+/* Section */
+.section{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;}
+.section-header{padding:14px 18px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;}
+.section-title{font-size:.92rem;font-weight:700;color:var(--text);}
+.section-count{font-size:.78rem;color:var(--text2);}
+.section-body{padding:14px 18px;}
+
+/* Tabs list */
+.tab-item{display:flex;align-items:center;justify-content:space-between;padding:10px 0;border-bottom:1px solid var(--border);}
+.tab-item:last-child{border-bottom:none;}
+.tab-name{font-weight:600;font-size:.9rem;}
+.tab-meta{font-size:.75rem;color:var(--text2);margin-top:2px;}
+.tab-total{font-weight:700;color:var(--green);font-size:1rem;}
+.tab-status{font-size:.7rem;padding:2px 8px;border-radius:10px;font-weight:700;}
+.tab-status.open{background:rgba(34,197,94,.15);color:var(--green);}
+
+/* Recent transactions */
+.tx-item{display:flex;align-items:center;justify-content:space-between;padding:9px 0;border-bottom:1px solid var(--border);}
+.tx-item:last-child{border-bottom:none;}
+.tx-name{font-size:.88rem;font-weight:600;}
+.tx-time{font-size:.73rem;color:var(--text2);}
+.tx-amount{font-weight:700;color:var(--text);}
+.tx-tip{font-size:.75rem;color:var(--green);}
+
+/* Top items */
+.item-row{display:flex;align-items:center;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--border);}
+.item-row:last-child{border-bottom:none;}
+.item-name{font-size:.88rem;}
+.item-count{font-size:.78rem;color:var(--text2);}
+.item-rev{font-weight:700;color:var(--accent);font-size:.88rem;}
+
+/* Staff */
+.staff-item{display:flex;align-items:center;gap:12px;padding:9px 0;border-bottom:1px solid var(--border);}
+.staff-item:last-child{border-bottom:none;}
+.staff-avatar{width:34px;height:34px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:.85rem;flex-shrink:0;}
+.staff-name{font-weight:600;font-size:.88rem;}
+.staff-role{font-size:.72rem;color:var(--text2);}
+.staff-since{font-size:.72rem;color:var(--text2);margin-left:auto;}
+
+/* Empty state */
+.empty{color:var(--text2);font-size:.85rem;text-align:center;padding:20px 0;}
+
+/* Live dot */
+.live-dot{width:8px;height:8px;border-radius:50%;background:var(--green);display:inline-block;margin-right:6px;animation:pulse 2s infinite;}
+@keyframes pulse{0%,100%{opacity:1;}50%{opacity:.4;}}
+
+/* Last updated */
+.last-updated{font-size:.72rem;color:var(--text2);text-align:center;padding:8px 0 16px;}
+
+/* Responsive */
+@media(max-width:600px){
+  .stat-value{font-size:1.5rem;}
+  .dash-body{padding:12px;}
+  .stat-row{grid-template-columns:repeat(2,1fr);}
+}
+</style>
+</head>
+<body>
+
+<!-- ── SETUP SCREEN ── -->
+<div class="screen active" id="setupScreen">
+  <div class="setup-card">
+    <h1>📊 Manager Dashboard</h1>
+    <p>Share <strong>manager-dashboard.html</strong> with your managers. They'll paste the same Firebase config and enter their PIN to view live sales, tabs, and tips on any device — read-only.</p>
+    <label style="font-size:.82rem;color:var(--text2);display:block;margin-bottom:6px;">Firebase Config <span style="color:var(--text2);">(paste the full config object)</span></label>
+    <textarea id="fbConfigInput" placeholder='{
+  "apiKey": "AIza...",
+  "authDomain": "your-app.firebaseapp.com",
+  "databaseURL": "https://your-app-default-rtdb.firebaseio.com",
+  "projectId": "your-app",
+  "storageBucket": "your-app.appspot.com",
+  "messagingSenderId": "123456",
+  "appId": "1:123:web:abc"
+}'></textarea>
+    <div class="err" id="setupErr"></div>
+    <button class="btn btn-accent" onclick="connectFirebase()">Connect & Continue →</button>
+  </div>
+</div>
+
+<!-- ── PIN SCREEN ── -->
+<div class="screen" id="pinScreen">
+  <div class="pin-card">
+    <h2>Manager Dashboard</h2>
+    <h1>Enter Your PIN</h1>
+    <div class="pin-dots" id="pinDots">
+      <div class="pin-dot"></div>
+      <div class="pin-dot"></div>
+      <div class="pin-dot"></div>
+      <div class="pin-dot"></div>
+    </div>
+    <div class="pin-error" id="pinError"></div>
+    <div class="pin-grid">
+      <button class="pin-btn" onclick="pinPress('1')">1</button>
+      <button class="pin-btn" onclick="pinPress('2')">2</button>
+      <button class="pin-btn" onclick="pinPress('3')">3</button>
+      <button class="pin-btn" onclick="pinPress('4')">4</button>
+      <button class="pin-btn" onclick="pinPress('5')">5</button>
+      <button class="pin-btn" onclick="pinPress('6')">6</button>
+      <button class="pin-btn" onclick="pinPress('7')">7</button>
+      <button class="pin-btn" onclick="pinPress('8')">8</button>
+      <button class="pin-btn" onclick="pinPress('9')">9</button>
+      <button class="pin-btn" onclick="pinClear()" style="color:var(--text2);">⌫</button>
+      <button class="pin-btn" onclick="pinPress('0')">0</button>
+      <button class="pin-btn" onclick="pinSubmit()" style="background:var(--accent);color:#1a1a2e;">✓</button>
+    </div>
+    <button class="pin-back" onclick="goToSetup()">← Change Firebase Config</button>
+  </div>
+</div>
+
+<!-- ── DASHBOARD SCREEN ── -->
+<div id="dashScreen">
+  <div class="dash-header">
+    <div class="dash-header-left">
+      <div>
+        <div class="dash-title">📊 Manager Dashboard <span class="live-dot"></span></div>
+        <div class="dash-subtitle" id="dashBarName">George &amp; Walt's</div>
+      </div>
+      <span class="badge-ro">READ ONLY</span>
+    </div>
+    <div style="display:flex;align-items:center;gap:12px;">
+      <span class="dash-user" id="dashUserName"></span>
+      <button class="btn-logout" onclick="logout()">Log Out</button>
+    </div>
+  </div>
+
+  <div class="dash-body">
+    <!-- Stat cards -->
+    <div class="stat-row">
+      <div class="stat-card">
+        <div class="stat-label">Today's Revenue</div>
+        <div class="stat-value green" id="statRevenue">$0.00</div>
+        <div class="stat-sub" id="statTxCount">0 transactions</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Today's Tips</div>
+        <div class="stat-value" id="statTips">$0.00</div>
+        <div class="stat-sub" id="statTipCount">0 tipped</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Open Tabs</div>
+        <div class="stat-value blue" id="statOpenTabs">0</div>
+        <div class="stat-sub" id="statTabTotal">$0.00 running total</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Staff On Shift</div>
+        <div class="stat-value" id="statStaff">0</div>
+        <div class="stat-sub">currently logged in</div>
+      </div>
+    </div>
+
+    <!-- Two column layout -->
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;" id="twoCol">
+
+      <!-- Open Tabs -->
+      <div class="section">
+        <div class="section-header">
+          <span class="section-title">🍺 Open Tabs</span>
+          <span class="section-count" id="tabsCount">0 open</span>
+        </div>
+        <div class="section-body" id="tabsList">
+          <div class="empty">No open tabs</div>
+        </div>
+      </div>
+
+      <!-- Recent Transactions -->
+      <div class="section">
+        <div class="section-header">
+          <span class="section-title">💳 Recent Transactions</span>
+          <span class="section-count" id="txCount">Today</span>
+        </div>
+        <div class="section-body" id="txList">
+          <div class="empty">No transactions today</div>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- Two column layout row 2 -->
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;">
+
+      <!-- Top Items -->
+      <div class="section">
+        <div class="section-header">
+          <span class="section-title">🔥 Top Items Today</span>
+        </div>
+        <div class="section-body" id="topItemsList">
+          <div class="empty">No sales data yet</div>
+        </div>
+      </div>
+
+      <!-- Staff On Shift -->
+      <div class="section">
+        <div class="section-header">
+          <span class="section-title">👥 Staff On Shift</span>
+        </div>
+        <div class="section-body" id="staffList">
+          <div class="empty">No staff logged in</div>
+        </div>
+      </div>
+
+    </div>
+
+    <div class="last-updated" id="lastUpdated">Connecting...</div>
+  </div>
+</div>
+
+<script>
+// ── State ──────────────────────────────────────────────────────────────────
+let _db       = null;
+let _employees = [];
+let _currentUser = null;
+let _pinBuffer = '';
+let _pinFails  = 0;
+let _pinLocked = false;
+
+const _ALLOWED_ROLES = ['owner', 'manager', 'dev'];
+
+// ── Helpers ────────────────────────────────────────────────────────────────
+function _safe(fn, fallback) {
+  try { return fn(); } catch(e) { return fallback; }
+}
+
+function _fmt(n) {
+  return '$' + (Number(n) || 0).toFixed(2);
+}
+
+function _today() {
+  return new Date().toDateString();
+}
+
+function _timeAgo(isoStr) {
+  if (!isoStr) return '';
+  const diff = Date.now() - new Date(isoStr).getTime();
+  const m = Math.floor(diff / 60000);
+  if (m < 1)  return 'just now';
+  if (m < 60) return m + 'm ago';
+  const h = Math.floor(m / 60);
+  if (h < 24) return h + 'h ago';
+  return Math.floor(h / 24) + 'd ago';
+}
+
+function _showScreen(id) {
+  ['setupScreen','pinScreen','dashScreen'].forEach(s => {
+    const el = document.getElementById(s);
+    if (el) {
+      el.classList.remove('active');
+      if (s === 'dashScreen') el.style.display = 'none';
+    }
+  });
+  const target = document.getElementById(id);
+  if (!target) return;
+  if (id === 'dashScreen') {
+    target.style.display = 'flex';
+    target.classList.add('active');
+  } else {
+    target.classList.add('active');
+  }
+}
+
+// ── Firebase Setup ─────────────────────────────────────────────────────────
+function connectFirebase() {
+  const raw = document.getElementById('fbConfigInput').value.trim();
+  const errEl = document.getElementById('setupErr');
+  errEl.style.display = 'none';
+
+  let cfg;
+  try {
+    // Allow both JS object and JSON formats
+    cfg = JSON.parse(raw.replace(/(['"])?([a-zA-Z0-9_]+)(['"])?:/g, '"$2":'));
+  } catch(e) {
+    errEl.textContent = 'Invalid config — paste the full firebaseConfig object from Firebase console.';
+    errEl.style.display = 'block';
+    return;
+  }
+
+  if (!cfg.databaseURL) {
+    errEl.textContent = 'Missing databaseURL — make sure Realtime Database is enabled in your Firebase project.';
+    errEl.style.display = 'block';
+    return;
+  }
+
+  try {
+    // Initialize Firebase (avoid duplicate app error)
+    let app;
+    try { app = firebase.app('mgr-dash'); }
+    catch(e) { app = firebase.initializeApp(cfg, 'mgr-dash'); }
+    _db = firebase.database(app);
+
+    // Test connection by reading employees
+    _db.ref('employees').once('value').then(snap => {
+      const data = snap.val();
+      if (data === null) {
+        // No employees yet — still valid connection
+        _employees = [];
+      } else if (typeof data === 'object') {
+        _employees = Array.isArray(data) ? data.filter(Boolean) : Object.values(data);
+      }
+
+      // Save config for session
+      _safe(() => sessionStorage.setItem('mgr_fb_cfg', JSON.stringify(cfg)));
+      _showScreen('pinScreen');
+
+    }).catch(err => {
+      errEl.textContent = 'Could not connect to Firebase. Check your config and database rules.';
+      errEl.style.display = 'block';
+    });
+
+  } catch(e) {
+    errEl.textContent = 'Firebase error: ' + e.message;
+    errEl.style.display = 'block';
+  }
+}
+
+function goToSetup() {
+  _showScreen('setupScreen');
+}
+
+// ── PIN Logic ──────────────────────────────────────────────────────────────
+function updatePinDots() {
+  const dots = document.querySelectorAll('.pin-dot');
+  dots.forEach((d, i) => d.classList.toggle('filled', i < _pinBuffer.length));
+}
+
+function pinPress(digit) {
+  if (_pinLocked || _pinBuffer.length >= 4) return;
+  _pinBuffer += digit;
+  updatePinDots();
+  if (_pinBuffer.length === 4) setTimeout(pinSubmit, 100);
+}
+
+function pinClear() {
+  _pinBuffer = _pinBuffer.slice(0, -1);
+  updatePinDots();
+}
+
+function pinSubmit() {
+  if (_pinLocked) return;
+  const errEl = document.getElementById('pinError');
+
+  const match = _employees.find(e =>
+    e && e.pin === _pinBuffer && _ALLOWED_ROLES.includes(e.role)
+  );
+
+  if (match) {
+    _currentUser = match;
+    _pinFails = 0;
+    _pinBuffer = '';
+    updatePinDots();
+    errEl.textContent = '';
+    document.getElementById('dashUserName').textContent = match.name + ' (' + match.role + ')';
+    _showScreen('dashScreen');
+    startDashboard();
+  } else {
+    _pinFails++;
+    _pinBuffer = '';
+    updatePinDots();
+
+    if (_pinFails >= 5) {
+      _pinLocked = true;
+      errEl.textContent = 'Too many attempts — locked for 30 seconds.';
+      setTimeout(() => { _pinLocked = false; _pinFails = 0; errEl.textContent = ''; }, 30000);
+    } else {
+      const rem = 5 - _pinFails;
+      const workerTried = _employees.find(e => e && e.pin === _pinBuffer);
+      if (workerTried && !_ALLOWED_ROLES.includes(workerTried.role)) {
+        errEl.textContent = 'Staff PINs cannot access the manager dashboard.';
+      } else {
+        errEl.textContent = 'Incorrect PIN. ' + rem + ' attempt' + (rem === 1 ? '' : 's') + ' remaining.';
+      }
+      setTimeout(() => { errEl.textContent = ''; }, 3000);
+    }
+  }
+}
+
+function logout() {
+  _currentUser = null;
+  _pinBuffer = '';
+  updatePinDots();
+  // Detach all Firebase listeners
+  if (_db) {
+    _db.ref('tabs').off();
+    _db.ref('transactions').off();
+    _db.ref('sessions').off();
+  }
+  _showScreen('pinScreen');
+}
+
+// ── Dashboard ──────────────────────────────────────────────────────────────
+function startDashboard() {
+  if (!_db) return;
+
+  // Listen to tabs
+  _db.ref('tabs').on('value', snap => {
+    const data = snap.val() || {};
+    const tabs = Array.isArray(data) ? data.filter(Boolean) : Object.values(data);
+    renderTabs(tabs.filter(t => t && t.open !== false));
+  });
+
+  // Listen to transactions
+  _db.ref('transactions').on('value', snap => {
+    const data = snap.val() || {};
+    const txs = Array.isArray(data) ? data.filter(Boolean) : Object.values(data);
+    renderTransactions(txs);
+  });
+
+  // Listen to active sessions (staff on shift)
+  _db.ref('sessions').on('value', snap => {
+    const data = snap.val() || {};
+    const sessions = Array.isArray(data) ? data.filter(Boolean) : Object.values(data);
+    renderStaff(sessions);
+  });
+}
+
+// ── Render: Tabs ───────────────────────────────────────────────────────────
+function renderTabs(tabs) {
+  const listEl = document.getElementById('tabsList');
+  const countEl = document.getElementById('tabsCount');
+  const statEl  = document.getElementById('statOpenTabs');
+  const totalEl = document.getElementById('statTabTotal');
+
+  statEl.textContent = tabs.length;
+  countEl.textContent = tabs.length + ' open';
+
+  const runningTotal = tabs.reduce((s, t) => s + (_safe(() => Number(t.total) || 0, 0)), 0);
+  totalEl.textContent = _fmt(runningTotal) + ' running total';
+
+  if (!tabs.length) {
+    listEl.innerHTML = '<div class="empty">No open tabs</div>';
+    return;
+  }
+
+  // Sort by total descending
+  tabs.sort((a, b) => (Number(b.total) || 0) - (Number(a.total) || 0));
+
+  listEl.innerHTML = tabs.slice(0, 12).map(t => `
+    <div class="tab-item">
+      <div>
+        <div class="tab-name">${_esc(t.name || 'Unknown')}</div>
+        <div class="tab-meta">${_safe(() => t.items ? t.items.length + ' item' + (t.items.length !== 1 ? 's' : '') : '0 items', '0 items')} · ${_timeAgo(t.openedAt)}</div>
+      </div>
+      <div style="text-align:right;">
+        <div class="tab-total">${_fmt(t.total)}</div>
+        <span class="tab-status open">Open</span>
+      </div>
+    </div>
+  `).join('');
+}
+
+// ── Render: Transactions ───────────────────────────────────────────────────
+function renderTransactions(allTxs) {
+  const listEl  = document.getElementById('txList');
+  const countEl = document.getElementById('txCount');
+
+  // Filter to today
+  const todayTxs = allTxs.filter(t => t && _safe(() => new Date(t.closedAt || t.date || t.ts).toDateString() === _today(), false));
+  todayTxs.sort((a, b) => new Date(b.closedAt || b.date || b.ts || 0) - new Date(a.closedAt || a.date || a.ts || 0));
+
+  // Stats
+  const totalRev  = todayTxs.reduce((s, t) => s + (_safe(() => Number(t.total) || 0, 0)), 0);
+  const totalTips = todayTxs.reduce((s, t) => s + (_safe(() => Number(t.tip) || 0, 0)), 0);
+  const tippedCount = todayTxs.filter(t => Number(t.tip) > 0).length;
+
+  document.getElementById('statRevenue').textContent  = _fmt(totalRev);
+  document.getElementById('statTxCount').textContent  = todayTxs.length + ' transaction' + (todayTxs.length !== 1 ? 's' : '');
+  document.getElementById('statTips').textContent     = _fmt(totalTips);
+  document.getElementById('statTipCount').textContent = tippedCount + ' tipped';
+  countEl.textContent = 'Today (' + todayTxs.length + ')';
+
+  if (!todayTxs.length) {
+    listEl.innerHTML = '<div class="empty">No transactions today</div>';
+  } else {
+    listEl.innerHTML = todayTxs.slice(0, 12).map(t => `
+      <div class="tx-item">
+        <div>
+          <div class="tx-name">${_esc(t.name || t.tabName || 'Guest')}</div>
+          <div class="tx-time">${_timeAgo(t.closedAt || t.date || t.ts)} · ${_esc(t.payMethod || t.method || '')}</div>
+        </div>
+        <div style="text-align:right;">
+          <div class="tx-amount">${_fmt(t.total)}</div>
+          ${Number(t.tip) > 0 ? `<div class="tx-tip">tip: ${_fmt(t.tip)}</div>` : ''}
+        </div>
+      </div>
+    `).join('');
+  }
+
+  // Top items
+  renderTopItems(todayTxs);
+
+  // Last updated
+  document.getElementById('lastUpdated').textContent = '🟢 Live · Last updated ' + new Date().toLocaleTimeString();
+}
+
+// ── Render: Top Items ──────────────────────────────────────────────────────
+function renderTopItems(todayTxs) {
+  const listEl = document.getElementById('topItemsList');
+  const counts = {};
+
+  todayTxs.forEach(tx => {
+    _safe(() => {
+      const items = tx.items || [];
+      items.forEach(item => {
+        if (!item || !item.name) return;
+        const key = item.name;
+        if (!counts[key]) counts[key] = { qty: 0, rev: 0 };
+        const qty = Number(item.qty) || 1;
+        counts[key].qty += qty;
+        counts[key].rev += (Number(item.price) || 0) * qty;
+      });
+    });
+  });
+
+  const sorted = Object.entries(counts).sort((a, b) => b[1].qty - a[1].qty);
+
+  if (!sorted.length) {
+    listEl.innerHTML = '<div class="empty">No sales data yet</div>';
+    return;
+  }
+
+  listEl.innerHTML = sorted.slice(0, 10).map(([name, d], i) => `
+    <div class="item-row">
+      <div>
+        <div class="item-name">${i + 1}. ${_esc(name)}</div>
+        <div class="item-count">${d.qty} sold</div>
+      </div>
+      <div class="item-rev">${_fmt(d.rev)}</div>
+    </div>
+  `).join('');
+}
+
+// ── Render: Staff ──────────────────────────────────────────────────────────
+function renderStaff(sessions) {
+  const listEl = document.getElementById('staffList');
+  const statEl = document.getElementById('statStaff');
+
+  const active = sessions.filter(s => s && s.active);
+  statEl.textContent = active.length;
+
+  if (!active.length) {
+    listEl.innerHTML = '<div class="empty">No staff logged in</div>';
+    return;
+  }
+
+  const roleColors = { owner: '#f0a500', manager: '#3b82f6', worker: '#22c55e', dev: '#a855f7' };
+
+  listEl.innerHTML = active.map(s => {
+    const color = roleColors[s.role] || '#9090a8';
+    const initials = (s.name || '?').split(' ').map(w => w[0]).join('').toUpperCase().slice(0, 2);
+    return `
+      <div class="staff-item">
+        <div class="staff-avatar" style="background:${color}22;color:${color};">${_esc(initials)}</div>
+        <div>
+          <div class="staff-name">${_esc(s.name || 'Unknown')}</div>
+          <div class="staff-role">${_esc(s.role || '')}</div>
+        </div>
+        <div class="staff-since">${_timeAgo(s.loginTime)}</div>
+      </div>
+    `;
+  }).join('');
+}
+
+// ── XSS guard ──────────────────────────────────────────────────────────────
+function _esc(str) {
+  return String(str || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+// ── Responsive: collapse two-col on mobile ─────────────────────────────────
+(function() {
+  const twoCol = document.getElementById('twoCol');
+  function checkWidth() {
+    if (twoCol) twoCol.style.gridTemplateColumns = window.innerWidth < 640 ? '1fr' : '1fr 1fr';
+  }
+  window.addEventListener('resize', checkWidth);
+  checkWidth();
+})();
+
+// ── Auto-restore session config ────────────────────────────────────────────
+(function() {
+  const saved = _safe(() => sessionStorage.getItem('mgr_fb_cfg'), null);
+  if (saved) {
+    document.getElementById('fbConfigInput').value = saved;
+  }
+})();
+</script>
+</body>
+</html>
