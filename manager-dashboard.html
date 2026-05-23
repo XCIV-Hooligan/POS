@@ -334,8 +334,15 @@ function connectFirebase() {
 
   let cfg;
   try {
-    // Allow both JS object and JSON formats
-    cfg = JSON.parse(raw.replace(/(['"])?([a-zA-Z0-9_]+)(['"])?:/g, '"$2":'));
+    // Strip JS variable wrapper if present e.g. "const firebaseConfig = {...}"
+    let cleaned = raw.replace(/^[\s\S]*?(\{)/, '$1').trim();
+    // Remove trailing semicolon if any
+    cleaned = cleaned.replace(/;+\s*$/, '').trim();
+    // Convert single-quoted keys/values to double quotes (JS object format)
+    cleaned = cleaned.replace(/'/g, '"');
+    // Add quotes to unquoted keys e.g. apiKey: → "apiKey":
+    cleaned = cleaned.replace(/([{,]\s*)([a-zA-Z0-9_]+)\s*:/g, '$1"$2":');
+    cfg = JSON.parse(cleaned);
   } catch(e) {
     errEl.textContent = 'Invalid config — paste the full firebaseConfig object from Firebase console.';
     errEl.style.display = 'block';
