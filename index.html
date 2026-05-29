@@ -264,16 +264,18 @@ header{background:var(--surface);border-bottom:1px solid var(--border);padding:8
 
 /* MODALS */
 .modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.7);display:flex;align-items:center;justify-content:center;z-index:200;padding:16px;}
-.tip-numpad-drawer{position:fixed;bottom:0;left:0;right:0;z-index:300;background:var(--surface);border-top:2px solid var(--accent);border-radius:18px 18px 0 0;padding:16px 20px 28px;box-shadow:0 -8px 40px rgba(0,0,0,.5);transform:translateY(100%);transition:transform .22s cubic-bezier(.4,0,.2,1);}
-.tip-numpad-drawer.open{transform:translateY(0);}
-.tip-numpad-drawer .drawer-handle{width:40px;height:4px;background:var(--border);border-radius:2px;margin:0 auto 14px;}
-.tip-numpad-drawer .drawer-title{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;}
+/* Numpad side panel */
+.tip-numpad-drawer{position:fixed;top:0;right:0;bottom:0;width:300px;z-index:300;background:var(--surface);border-left:2px solid var(--accent);padding:20px 16px 24px;box-shadow:-8px 0 40px rgba(0,0,0,.5);transform:translateX(100%);transition:transform .22s cubic-bezier(.4,0,.2,1);display:flex;flex-direction:column;overflow-y:auto;}
+.tip-numpad-drawer.open{transform:translateX(0);}
+.tip-numpad-drawer .drawer-handle{display:none;}
+.tip-numpad-drawer .drawer-title{display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;}
 .tip-numpad-drawer .drawer-title span{font-size:.9rem;font-weight:700;color:var(--accent);}
 .tip-numpad-drawer .ctd-value{font-size:2rem;font-weight:900;color:var(--text);text-align:right;}
-.tip-numpad-drawer .tip-numpad{gap:8px;}
-.tip-numpad-drawer .tip-numpad-btn{padding:14px 4px;font-size:1.2rem;}
-#checkoutModal.drawer-open{align-items:flex-start;padding-top:12px;padding-bottom:var(--drawer-h,340px);}
-#checkoutModal.drawer-open .modal{max-height:calc(100vh - var(--drawer-h,340px) - 24px);}
+.tip-numpad-drawer .tip-numpad{gap:8px;flex:1;}
+.tip-numpad-drawer .tip-numpad-btn{padding:16px 4px;font-size:1.2rem;}
+/* Shift checkout modal left when panel is open */
+#checkoutModal.drawer-open{justify-content:flex-start;padding-left:16px;padding-right:316px;}
+#checkoutModal.drawer-open .modal{max-width:100%;max-height:100vh;}
 .modal{background:var(--surface);border:1px solid var(--border);border-radius:14px;width:100%;max-width:440px;max-height:92vh;overflow-y:auto;box-shadow:0 20px 60px rgba(0,0,0,.5);}
 .modal-header{padding:16px 18px 12px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;}
 .modal-title{font-size:1rem;font-weight:700;}
@@ -3871,10 +3873,14 @@ function renderCheckoutBody(){
       <div style="font-size:2rem;font-weight:800;color:var(--green);">${(()=>{const n=parseFloat(_cashGivenRaw)||0;const c=n-finalTotal;return n>0&&c>=0?'$'+c.toFixed(2):'—';})()}</div>
     </div>
     <input type="hidden" id="cashTendered" value="${_cashGivenRaw||''}">`:''}
+    ${_customTipActive&&tip>0?`<div style="display:flex;justify-content:space-between;align-items:center;background:rgba(240,165,0,.08);border:1px solid var(--accent);border-radius:8px;padding:8px 12px;margin-bottom:8px;">
+      <span style="font-size:.8rem;font-weight:700;color:var(--accent);">✏️ Custom Tip</span>
+      <span style="font-size:1.1rem;font-weight:800;color:var(--accent);">$${tip.toFixed(2)}</span>
+    </div>`:''}
     <div class="charge-total">
       <div class="clabel">Total Charge</div>
       <div class="amount">$${finalTotal.toFixed(2)}</div>
-      ${tip>0?`<div style="font-size:.72rem;color:var(--text2);margin-top:2px">includes $${tip.toFixed(2)} tip</div>`:''}
+      ${tip>0&&!_customTipActive?`<div style="font-size:.72rem;color:var(--text2);margin-top:2px">includes $${tip.toFixed(2)} tip</div>`:''}
       ${autoGrat>0?`<div style="font-size:.72rem;color:var(--text2)">includes $${autoGrat.toFixed(2)} auto-gratuity</div>`:''}
     </div>
     ${selectedPayMethod==='cash'
@@ -3943,11 +3949,8 @@ function openCashDrawer(total){
   bills.innerHTML=billAmts.map(b=>`<button class="btn btn-sm btn-ghost" onclick="cashDrawerBill(${b})">\$${b}</button>`).join('')+`<button class="btn btn-sm btn-ghost" onclick="cashDrawerBill(${Math.ceil(total*100)/100})">Exact</button>`;
   _updateCashDrawerDisplay();
   drawer.classList.add('open');
-  requestAnimationFrame(()=>{
-    const h=drawer.offsetHeight;
-    const modal=document.getElementById('checkoutModal');
-    if(modal){modal.style.setProperty('--drawer-h',h+'px');modal.classList.add('drawer-open');}
-  });
+  const modal=document.getElementById('checkoutModal');
+  if(modal)modal.classList.add('drawer-open');
 }
 function closeCashDrawer(){
   const drawer=document.getElementById('cashNumpadDrawer');
@@ -4045,11 +4048,8 @@ function openCustomTip(){
   numpad.innerHTML=['1','2','3','4','5','6','7','8','9','⌫','0','.'].map(k=>`<div class="tip-numpad-btn${k==='⌫'?' backspace':''}" onclick="drawerNumpadPress('${k}')">${k}</div>`).join('');
   document.getElementById('drawerTipDisplay').textContent='$0.00';
   drawer.classList.add('open');
-  requestAnimationFrame(()=>{
-    const h=drawer.offsetHeight;
-    const modal=document.getElementById('checkoutModal');
-    if(modal){modal.style.setProperty('--drawer-h',h+'px');modal.classList.add('drawer-open');}
-  });
+  const modal=document.getElementById('checkoutModal');
+  if(modal)modal.classList.add('drawer-open');
   renderCheckoutBody();
 }
 function closeCustomTipDrawer(){
@@ -4218,10 +4218,8 @@ function processPayment(){
         </div>`:`<div style="font-size:1.1rem;font-weight:700;color:var(--green)">Payment Approved!</div><div style="font-size:1.5rem;font-weight:700;color:var(--accent)">$${finalTotal.toFixed(2)}</div>`}
 
         <div style="font-size:.78rem;color:var(--text2);margin-top:6px">${method} · ${new Date().toLocaleTimeString()} · ${currentUser.name}</div>
-        <div style="display:flex;gap:7px;margin-top:10px;width:100%">
-          <button class="btn btn-md btn-ghost" style="flex:1" onclick="finishPayment(false)">Done</button>
-          <button class="btn btn-md btn-blue" style="flex:1" onclick="finishPayment(true)">🧾 Receipt</button>
-        </div>
+        <button class="btn btn-lg btn-blue" style="width:100%;margin-top:12px;font-size:1rem;" onclick="finishPayment(true)">🖨 Print Receipt</button>
+        <button class="btn btn-md btn-ghost" style="width:100%;margin-top:6px;" onclick="finishPayment(false)">Skip — Done</button>
       </div>`;
   };
 
