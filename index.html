@@ -316,6 +316,7 @@ select.form-input{cursor:pointer;}
 .toast.success{border-color:var(--green);color:var(--green);}
 .toast.error{border-color:var(--red);color:var(--red);}
 .toast.info{border-color:var(--accent);color:var(--accent);}
+.toast.warn{border-color:#f97316;color:#f97316;}
 
 ::-webkit-scrollbar{width:4px;height:4px;}
 ::-webkit-scrollbar-track{background:transparent;}
@@ -540,7 +541,7 @@ input:checked+.toggle-track::after{left:23px;}
     </div>
     <div style="display:flex;gap:8px;align-items:center;">
       <span id="eventEmpBadge" style="font-size:.75rem;color:var(--text2);"></span>
-      ${currentUser&&(currentUser.role==='owner'||currentUser.role==='manager')?`<button class="btn btn-sm btn-ghost" style="font-size:.75rem;" onclick="openEventEditor()">✏️ Edit Items</button>`:''}
+      <span id="eventEditBtnWrap"></span>
       <button class="btn btn-sm btn-ghost" style="font-size:.75rem;" onclick="exitEventMode()">✕ Exit</button>
     </div>
   </div>
@@ -1638,6 +1639,45 @@ input:checked+.toggle-track::after{left:23px;}
 <div class="toast" id="toast"></div>
 
 <script>
+// ============================================================
+//  BAR POS — PROPRIETARY SOFTWARE
+//  Owner    : Cassius W. (George & Walt's)
+//  Contact  : w.cassius91@gmail.com
+//  Built    : 2025 — All rights reserved
+//  Version  : 2.0-fixed
+//  License  : Private — not for redistribution
+// ============================================================
+
+// ── FIREBASE CONFIG (baked in — connects automatically on load) ──────────────
+const _FIREBASE_CONFIG = Object.freeze({
+  apiKey:            "AIzaSyB4sQuU_LdbeovGdY2EG70bXSGRSUvi-MI",
+  authDomain:        "george-and-walts-pos.firebaseapp.com",
+  databaseURL:       "https://george-and-walts-pos-default-rtdb.firebaseio.com",
+  projectId:         "george-and-walts-pos",
+  storageBucket:     "george-and-walts-pos.firebasestorage.app",
+  messagingSenderId: "205916033089",
+  appId:             "1:205916033089:web:6da21282d9e65f0cc136c0",
+  measurementId:     "G-NREK25VN4Q"
+});
+
+// Ownership signature — do not remove
+const _POS_SIGNATURE = Object.freeze({
+  owner:    'Cassius W.',
+  bar:      "George & Walt's",
+  contact:  'w.cassius91@gmail.com',
+  version:  '2.0-fixed',
+  built:    '2025',
+  license:  'Private — All rights reserved',
+  verify:   function(){ return btoa(this.owner + '|' + this.contact); }
+});
+
+// ============================================================
+// HOW TO VERIFY OWNERSHIP:
+// Open browser console and run:
+//   _POS_SIGNATURE.verify()
+// Returns a base64 token tied to owner + contact info.
+// ============================================================
+
 // ===================== STATE =====================
 // ── Safe localStorage parser — falls back to default on corrupt data ──
 function _safeParse(key, fallback){
@@ -1875,6 +1915,11 @@ let activeSubCat = 'All';
 let activeDrinkGroup = null; // id of active DRINK_GROUPS entry
 let nextEmpId = Math.max(...employees.map(e=>e.id),0)+1;
 let nextMenuId = Math.max(...menuItems.map(i=>i.id),0)+1;
+// ── RESILIENCE CONSTANTS (must be before any function that references them) ──
+const MAX_TAB_ITEMS     = 200;
+const MAX_TRANSACTIONS  = 5000;
+const CLOSED_TAB_TTL_DAYS = 3;
+const BACKUP_INTERVAL_MS  = 5 * 60 * 1000;
 // ── DATA SAFETY UTILITIES ─────────────────────────────────────────────────
 // _currencyRound: prevents float rounding errors on large totals (e.g. $999.99)
 function _currencyRound(n){ return Math.round((n||0)*100)/100; }
@@ -2509,7 +2554,7 @@ function addToOrder(item){
     if(typeof _log==='function') _log('error','Tab Size','Add blocked — tab at max item limit','Items: '+currentOrder.length);
     return;
   }
-  if(currentOrder.length >= MAX_TAB_ITEMS * 0.9) _checkTabSizeLimit(); // warn at 90%
+  if(currentOrder.length >= MAX_TAB_ITEMS * 0.9){ if(!_checkTabSizeLimit()) return; } // warn at 90%, block at 100%
   // Show modifier picker
   _modItem=item; _modSelected=[]; _modPriceMap={}; _editOrderIdx=null;
   _setModModalMode('add');
@@ -2835,14 +2880,14 @@ function renderOrder(){
           <div class="last-round-item">
             <span style="font-size:1rem">${it.emoji||'🍹'}</span>
             <span class="last-round-item-name">${it.name}${it.qty>1?' x'+it.qty:''}</span>
-            <button class="last-round-reorder-btn" onclick="reorderItem(${i},${tabTx.indexOf(last)})">↩ Add</button>
+            <button class="last-round-reorder-btn" onclick="reorderItem(${i},${transactions.indexOf(last)})">↩ Add</button>
           </div>`).join('');
         const ts=new Date(last.timestamp);
         const timeStr=ts.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'});
         lastRoundHtml=`<div class="last-round">
           <div class="last-round-header"><span>↩ Last Round (${timeStr})</span></div>
           ${itemsHtml}
-          <button class="last-round-all-btn" onclick="reorderAllItems(${tabTx.indexOf(last)})">↩ Reorder Entire Last Round</button>
+          <button class="last-round-all-btn" onclick="reorderAllItems(${transactions.indexOf(last)})">↩ Reorder Entire Last Round</button>
         </div>`;
       }
     }
@@ -2915,7 +2960,7 @@ function renderTabs(){
     badge.textContent=visibleTabs.length;badge.style.display='';
     list.innerHTML='';
     visibleTabs.forEach(tab=>{
-      const tabTotal=tab.items.reduce((s,i)=>s+i.price*i.qty,0);
+      const tabTotal=tab.items.reduce((s,i)=>s+(i.price+(i.modTotal||0))*i.qty,0);
       const emp=employees.find(e=>e.id===tab.employeeId);
       const itemCount=tab.items.reduce((s,i)=>s+i.qty,0);
       const el=document.createElement('div');
@@ -3002,7 +3047,7 @@ function quickTabSkip(){
       document.getElementById('modModalTitle').textContent=`${item.emoji} ${item.name}`;
       document.getElementById('modItemPreview').innerHTML=`<div style="font-size:1.6rem">${item.emoji}</div><div><div style="font-weight:700">${item.name}</div><div style="font-size:.75rem;color:var(--accent)">$${item.price.toFixed(2)}</div></div>`;
       document.getElementById('modCustomNote').value='';
-      showModal('modModal');
+      showModal('modifierModal');
     }
   }
 }
@@ -3103,7 +3148,7 @@ function renderSeatConfig(){
   const seatNums=[1,2,3,4,5,6];
   const usedSeats=[...new Set(Object.values(_seatAssignments))].sort((a,b)=>a-b);
   const allAssigned=splitOrderSnapshot.length>0&&splitOrderSnapshot.every((_,i)=>_seatAssignments[i]!=null);
-  const subtotal=splitOrderSnapshot.reduce((s,i)=>s+(i.comped?0:i.price*i.qty),0);
+  const subtotal=splitOrderSnapshot.reduce((s,i)=>s+(i.comped?0:(i.price+(i.modTotal||0))*i.qty),0);
   const tipAmt=subtotal*(splitTipPct/100);
   const tax=subtotal*(settings.taxRate/100);
 
@@ -3166,7 +3211,7 @@ function assignSeat(lineIdx,seatNum){
 }
 
 function getSplitTotal(){
-  const subtotal=splitOrderSnapshot.reduce((s,i)=>s+i.price*i.qty,0);
+  const subtotal=splitOrderSnapshot.reduce((s,i)=>s+(i.price+(i.modTotal||0))*i.qty,0);
   const tax=subtotal*(settings.taxRate/100);
   const tip=subtotal*(splitTipPct/100);
   const grandTotal=subtotal+tax+tip;
@@ -3251,14 +3296,14 @@ function startSeatPayments(){
 function renderSeatPayment(usedSeats){
   if(!usedSeats)usedSeats=[...new Set(Object.values(_seatAssignments))].sort((a,b)=>a-b);
   const seat=usedSeats[_seatPayIdx];
-  const subtotal=splitOrderSnapshot.reduce((s,i)=>s+(i.comped?0:i.price*i.qty),0);
+  const subtotal=splitOrderSnapshot.reduce((s,i)=>s+(i.comped?0:(i.price+(i.modTotal||0))*i.qty),0);
   const tax=subtotal*(settings.taxRate/100);
   const tipAmt=subtotal*(splitTipPct/100);
   const tipPerSeat=tipAmt/usedSeats.length;
   const taxPerSeat=tax/usedSeats.length;
   // Items for this seat
   const seatItems=splitOrderSnapshot.filter((_,i)=>_seatAssignments[i]===seat);
-  const seatSubtotal=seatItems.reduce((s,i)=>s+(i.comped?0:i.price*i.qty),0);
+  const seatSubtotal=seatItems.reduce((s,i)=>s+(i.comped?0:(i.price+(i.modTotal||0))*i.qty),0);
   const seatTotal=seatSubtotal+taxPerSeat+tipPerSeat;
   const dots=usedSeats.map((s,i)=>`<div class="split-dot ${i<_seatPayIdx?'paid':i===_seatPayIdx?'current':''}"></div>`).join('');
   document.getElementById('splitBody').innerHTML=`
@@ -3463,6 +3508,12 @@ function confirmRefund(){
   const methodSel=document.getElementById('refundMethod').value;
   if(!reason){showToast('Enter a refund reason','error');return;}
   const tx=transactions.find(t=>t.id===txId);if(!tx)return;
+  // ── GUARD: block double-refund ────────────────────────────────────────────
+  if(tx.refunded){
+    showToast(`This transaction was already refunded on ${new Date(tx.refundedAt).toLocaleString()} by ${tx.refundedBy}`,'error');
+    closeModal('refundModal');
+    return;
+  }
   let amt;
   if(_refundType==='full'){
     amt=tx.total;
@@ -3845,11 +3896,40 @@ function processPayment(){
   const t=getOrderTotal(selectedTip);
   const tip=_currencyRound(t.subtotal*selectedTip/100);
   const rawSubtotal=currentOrder.reduce((s,i)=>s+(i.comped?0:(i.price+(i.modTotal||0))*i.qty),0);
-  const autoGrat=_currencyRound(getAutoGratuity(rawSubtotal));
+  const autoGrat=(!_discountReason&&selectedTip===0)?_currencyRound(getAutoGratuity(rawSubtotal)):0;
   const finalTotal=_currencyRound(t.subtotal+t.tax+tip+autoGrat);
+
+  // ── GUARD 1: NaN / zero / negative total ─────────────────────────────────
+  if(!isFinite(finalTotal)||isNaN(finalTotal)){
+    showToast('Payment error: total is invalid — check menu item prices','error');
+    _unlockTab(checkoutTabId);
+    if(typeof _log==='function') _log('error','Payment','finalTotal is NaN or Infinity','subtotal:'+t.subtotal+' tax:'+t.tax+' tip:'+tip+' autoGrat:'+autoGrat);
+    return;
+  }
+  if(finalTotal<0){
+    showToast('Payment error: total is negative — check discounts and prices','error');
+    _unlockTab(checkoutTabId);
+    if(typeof _log==='function') _log('error','Payment','finalTotal is negative','$'+finalTotal);
+    return;
+  }
+
+  // ── GUARD 2: payment method required ─────────────────────────────────────
+  if(!selectedPayMethod){
+    showToast('Select a payment method before processing','error');
+    _unlockTab(checkoutTabId);
+    return;
+  }
+
   const isCash=selectedPayMethod==='cash';
   const method=isCash?'Cash':selectedPayMethod==='tap'?'Tap to Pay':'Card';
+
+  // ── GUARD 3: cash tendered must cover the total ───────────────────────────
   const cashTendered=isCash?parseFloat(document.getElementById('cashTendered')?.value||0):0;
+  if(isCash&&(isNaN(cashTendered)||cashTendered<finalTotal-0.005)){
+    showToast(`Cash tendered ($${cashTendered.toFixed(2)}) is less than total ($${finalTotal.toFixed(2)})`,'error');
+    _unlockTab(checkoutTabId);
+    return;
+  }
   const changeDue=isCash?_currencyRound(cashTendered-finalTotal):0;
   const compedItems=currentOrder.filter(i=>i.comped);
   const compTotal=_currencyRound(compedItems.reduce((s,i)=>s+i.price*i.qty,0));
@@ -3924,6 +4004,7 @@ function finishPayment(doShowReceipt){
   const tip=t.subtotal*selectedTip/100;
   const rawSubtotal=currentOrder.reduce((s,i)=>s+(i.comped?0:(i.price+(i.modTotal||0))*i.qty),0);
   const autoGrat=getAutoGratuity(rawSubtotal);
+  const hhDiscountAmt=t.hhDiscount||0;
   const snapshot=currentOrder.map(i=>({...i}));
   closeModal('checkoutModal');
   currentOrder=[];activeTabId=null;checkoutTabId=null;_noTabSession=false;
@@ -3932,7 +4013,7 @@ function finishPayment(doShowReceipt){
   playSuccessBeep();
   updateShiftTips();
   showToast('Payment complete!','success');
-  if(doShowReceipt)showReceiptModal(snapshot,t.subtotal,t.tax,tip,autoGrat);
+  if(doShowReceipt)showReceiptModal(snapshot,t.subtotal,t.tax,tip,autoGrat,hhDiscountAmt);
 }
 
 // ===================== VIEW HISTORICAL TRANSACTION =====================
@@ -4004,7 +4085,7 @@ function viewTransaction(txId){
   // Temporarily set globals so printReceipt() works
   lastTxId=tx.id; lastTxTimestamp=tx.timestamp; lastPayMethod=tx.method||'';
   lastCashTendered=tx.cashTendered||0; lastChangeDue=tx.changeDue||0;
-  lastDiscountReason=tx.discountReason||''; lastDiscountPct=0; lastDiscountFlat=tx.discountAmt||0;
+  lastDiscountReason=tx.discountReason||''; lastDiscountPct=tx.discountPct||0; lastDiscountFlat=tx.discountAmt||0;
   _lastReceiptItems=items; _lastReceiptSubtotal=subtotal; _lastReceiptTax=tax; _lastReceiptTip=tip; _lastReceiptAutoGrat=autoGrat;
 
   document.getElementById('receiptBody').innerHTML=html;
@@ -4107,7 +4188,7 @@ function buildReceiptHTML(items,subtotal,tax,tip,forPrint,autoGrat=0){
 
   const itemRows=items.map(i=>{
     const comped=!!i.comped;
-    const lineTotal=comped?'COMP':`$${(i.price*i.qty).toFixed(2)}`;
+    const lineTotal=comped?'COMP':`$${((i.price+(i.modTotal||0))*i.qty).toFixed(2)}`;
     const label=`${i.name} x${i.qty}`;
     const _imt4=(i.modTotal||0);const modLine=(i.mods&&i.mods.length)||(i.note)?`<div style="font-size:${forPrint?'8pt':'.65rem'};color:#888;margin-left:8px;">${[...modNames(i.mods),i.note?`"${i.note}"`:''].filter(Boolean).join(', ')}${_imt4>0?` (+$${_imt4.toFixed(2)})`:''}</div>`:'';
     return`<div style="display:flex;justify-content:space-between;${comped?'opacity:.6;':''}">`+
@@ -4151,14 +4232,13 @@ let _lastReceiptItems=[],_lastReceiptSubtotal=0,_lastReceiptTax=0,_lastReceiptTi
 let lastDiscountReason='',lastDiscountPct=0,lastDiscountFlat=0;
 let lastHHDiscountAmt=0,lastHHName='';
 
-function showReceiptModal(items,subtotal,tax,tip,autoGrat=0){
+function showReceiptModal(items,subtotal,tax,tip,autoGrat=0,hhDiscountAmt=0){
   // Cache for reprint
   _lastReceiptItems=items.map(i=>({...i}));
   _lastReceiptSubtotal=subtotal;_lastReceiptTax=tax;_lastReceiptTip=tip;_lastReceiptAutoGrat=autoGrat;
   lastDiscountReason=_discountReason||'';lastDiscountPct=_discountPct;lastDiscountFlat=_discountFlat;
-  // Capture happy hour discount if no manual discount was applied
-  const t=getOrderTotal();
-  lastHHDiscountAmt=(!_discountReason&&t.hhDiscount>0)?t.hhDiscount:0;
+  // Use pre-computed HH discount (currentOrder may already be cleared at this point)
+  lastHHDiscountAmt=hhDiscountAmt||0;
   lastHHName=lastHHDiscountAmt>0?(getActiveHappyHour()?.name||'Happy Hour'):'';
   document.getElementById('receiptBody').innerHTML=buildReceiptHTML(items,subtotal,tax,tip,false,autoGrat);
   showModal('receiptModal');
@@ -4274,8 +4354,8 @@ function renderReports(){
     methodMap[m].total+=lineTotal;
     if(_reportView==='all')methodMap[m].tips+=tx.tip||0;
   });
-  const methodIcons={'Cash':'💵','Card':'💳','Tap':'📱','Comp':'🎁'};
-  const methodColors={'Cash':'var(--green)','Card':'var(--blue)','Tap':'var(--purple)','Comp':'var(--accent)'};
+  const methodIcons={'Cash':'💵','Card':'💳','Tap to Pay':'📱','Comp':'🎁'};
+  const methodColors={'Cash':'var(--green)','Card':'var(--blue)','Tap to Pay':'var(--purple)','Comp':'var(--accent)'};
   const grandTotal=positiveTx.reduce((s,tx)=>s+(viewCats?viewItems(tx).reduce((is,i)=>is+(i.comped?0:i.price*i.qty),0):(tx.total||0)),0)||1;
   const methodEntries=Object.entries(methodMap).sort((a,b)=>b[1].total-a[1].total);
   const payGrid=document.getElementById('payMethodGrid');
@@ -4846,7 +4926,7 @@ function saveMenuItem(){
   }
   // Auto-switch management tab to match saved item's category
   _menuMgmtTab=FOOD_CATS.includes(cat)?'food':'drinks';
-  saveMenu();renderMenuTable();renderMenu();renderCategories();closeModal('menuItemModal');
+  saveMenu();renderMenuTable();renderMenu();closeModal('menuItemModal');
   setMenuMgmtTab(_menuMgmtTab);
   showToast('Menu item saved','success');
 }
@@ -4854,7 +4934,7 @@ function saveMenuItem(){
 function deleteItem(id){
   if(!confirm('Remove this item from the menu?'))return;
   menuItems=menuItems.filter(i=>i.id!==id);
-  saveMenu();renderMenuTable();renderMenu();renderCategories();showToast('Item removed','success');
+  saveMenu();renderMenuTable();renderMenu();showToast('Item removed','success');
 }
 
 // ===================== SETTINGS =====================
@@ -5451,11 +5531,12 @@ function updateSettingsSyncBadge(){
   else{el.style.color='var(--text2)';el.textContent='○ Not connected';}
 }
 
-// Auto-connect Firebase on app start if config saved
+// Auto-connect Firebase on app start using baked-in config
 (function autoConnectFirebase(){
-  const saved=localStorage.getItem('pos2_firebase_config');
-  if(!saved)return;
-  try{const config=JSON.parse(saved);if(config.databaseURL)connectFirebase(config);}catch(e){}
+  const config = _FIREBASE_CONFIG;
+  // Seed localStorage so the Settings UI shows the config in the textarea
+  localStorage.setItem('pos2_firebase_config', JSON.stringify(config));
+  connectFirebase(config);
 })();
 
 // Initialise IndexedDB + show any leftover offline queue immediately
@@ -5577,7 +5658,7 @@ const THEMES={
   dark:{
     '--bg':'#0f0f13','--surface':'#1a1a24','--surface2':'#22222f','--surface3':'#2a2a3a',
     '--border':'#2e2e42','--text':'#f0f0f5','--text2':'#9090a8','--accent':'#f0a500',
-    '--owner':'#f97316','--manager':'#a855f7','--worker':'#3b82f6'
+    '--owner':'#f0a500','--manager':'#3b82f6','--worker':'#22c55e'
   },
   light:{
     '--bg':'#f2efe8','--surface':'#ffffff','--surface2':'#ece9e1','--surface3':'#e0dcd3',
@@ -6102,6 +6183,7 @@ function showModal(id){document.getElementById(id).classList.remove('hidden');}
 function closeModal(id){
   document.getElementById(id).classList.add('hidden');
   if(id==='menuItemModal'){const dd=document.getElementById('emojiPickerDropdown');if(dd)dd.classList.add('hidden');document.removeEventListener('click',_epClose);}
+  if(id==='checkoutModal'&&checkoutTabId){_unlockTab(checkoutTabId);checkoutTabId=null;}
 }
 document.querySelectorAll('.modal-overlay').forEach(o=>o.addEventListener('click',e=>{if(e.target===o)o.classList.add('hidden');}));
 
@@ -6978,6 +7060,11 @@ function enterEventMode(){
   _eventTab='drinks';
   const empBadge=document.getElementById('eventEmpBadge');
   if(empBadge&&currentUser)empBadge.textContent=`${currentUser.emoji} ${currentUser.name}`;
+  const editWrap=document.getElementById('eventEditBtnWrap');
+  if(editWrap){
+    const canEdit=currentUser&&(currentUser.role==='owner'||currentUser.role==='manager');
+    editWrap.innerHTML=canEdit?`<button class="btn btn-sm btn-ghost" style="font-size:.75rem;" onclick="openEventEditor()">✏️ Edit Items</button>`:'';
+  }
   document.getElementById('eventScreen').style.display='flex';
   renderEventGrid();
   renderEventTray();
@@ -7351,11 +7438,7 @@ setInterval(updateClock,1000);
 
 // ===================== RESILIENCE & INTEGRITY SYSTEM =====================
 
-// ── CONSTANTS ────────────────────────────────────────────────────────────────
-const MAX_TAB_ITEMS     = 200;   // max line items on one tab before warning
-const MAX_TRANSACTIONS  = 5000;  // archive oldest when exceeded
-const CLOSED_TAB_TTL_DAYS = 3;   // auto-purge closed tabs older than this
-const BACKUP_INTERVAL_MS  = 5 * 60 * 1000; // auto-backup every 5 minutes
+// ── CONSTANTS (declared near state variables above to avoid TDZ errors) ──────
 
 // ── SCHEMA VALIDATORS ────────────────────────────────────────────────────────
 function _validateTab(tab){
@@ -7425,13 +7508,13 @@ function _pruneTransactions(){
   if(transactions.length <= MAX_TRANSACTIONS) return;
   const excess = transactions.length - MAX_TRANSACTIONS;
   // Archive oldest to a separate localStorage key before dropping
-  const toArchive = transactions.slice(-excess);
+  const toArchive = transactions.slice(0, excess); // oldest first
   try{
     const existing=JSON.parse(localStorage.getItem('pos2_tx_archive')||'[]');
     const merged=[...existing,...toArchive].slice(-10000); // cap archive at 10k
     localStorage.setItem('pos2_tx_archive',JSON.stringify(merged));
   }catch(e){}
-  transactions = transactions.slice(0, MAX_TRANSACTIONS);
+  transactions = transactions.slice(excess); // keep newest
   if(typeof _log==='function') _log('warn','Pruning','Transactions pruned: '+excess+' oldest archived','Archive key: pos2_tx_archive');
 }
 
@@ -8000,6 +8083,7 @@ document.addEventListener('DOMContentLoaded', ()=>{
   // ── Storage ──────────────────────────────────────────────────
   const MAX_LOGS = 200;
   const _hookLogs = [];
+  window._hookLogs = _hookLogs;
 
   function _log(level, category, message, detail){
     const entry = {
@@ -8014,6 +8098,7 @@ document.addEventListener('DOMContentLoaded', ()=>{
     if(_hookLogs.length > MAX_LOGS) _hookLogs.pop();
     _refreshHookPanel();
   }
+  window._log = _log;
 
   // ── 1. Global JS error catcher ────────────────────────────────
   window.onerror = function(msg, src, line, col, err){
@@ -8085,7 +8170,7 @@ document.addEventListener('DOMContentLoaded', ()=>{
   window.addEventListener('load', function(){
     const toWatch = ['processPayment','createTab','deleteTab','checkoutTab',
                      'processSplitPayment','finishSplit','voidTransaction',
-                     'processPayment','transferTab'];
+                     'transferTab'];
     toWatch.forEach(name => {
       if(typeof window[name] === 'function'){
         window[name] = _watchFn(name, window[name]);
@@ -8249,6 +8334,7 @@ document.addEventListener('visibilitychange', function(){
   if(_origLoginAs) window.loginAs = function(emp){
     _origLoginAs(emp);
     _acquireWakeLock();
+    if(typeof _startHeartbeat==='function') _startHeartbeat();
   };
   if(_origLogout) window.logout = function(fromInactivity){
     _releaseWakeLock();
