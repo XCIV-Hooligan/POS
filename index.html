@@ -42,6 +42,10 @@ body{background:var(--bg);color:var(--text);font-family:'Segoe UI',system-ui,san
 .btn-accent:hover{background:#ffb820;}
 .btn-green{background:var(--green);color:#fff;}
 .btn-green:hover{background:#16a34a;}
+.btn-countdown{position:relative;overflow:hidden;background:var(--green);color:#fff;}
+.btn-countdown::before{content:'';position:absolute;top:0;left:0;height:100%;background:rgba(0,0,0,.25);animation:countdown-shrink var(--cd-dur,4s) linear forwards;}
+@keyframes countdown-shrink{from{width:100%}to{width:0%}}
+.btn-cancel-pay{background:var(--surface3);border:2px solid var(--red);color:var(--red);margin-top:6px;font-size:.85rem;font-weight:700;}
 .btn-red{background:var(--red);color:#fff;}
 .btn-red:hover{background:#dc2626;}
 .btn-ghost{background:var(--surface3);color:var(--text);}
@@ -283,13 +287,22 @@ select.form-input{cursor:pointer;}
 .checkout-divider{border:none;border-top:1px solid var(--border);margin:6px 0;}
 .checkout-total-row{display:flex;justify-content:space-between;font-size:.85rem;}
 .checkout-total-row.big{font-size:1rem;font-weight:700;color:var(--accent);}
-.tip-options{display:grid;grid-template-columns:repeat(4,1fr);gap:5px;margin-bottom:14px;}
+.tip-options{display:grid;grid-template-columns:repeat(auto-fill,minmax(62px,1fr));gap:5px;margin-bottom:8px;}
 .tip-btn{background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:9px 5px;cursor:pointer;text-align:center;transition:all .15s;}
 .tip-btn:hover{border-color:var(--accent);}
 .tip-btn.selected{background:rgba(240,165,0,.15);border-color:var(--accent);color:var(--accent);font-weight:700;}
 .tip-btn .tip-pct{font-size:.95rem;font-weight:700;}
 .tip-btn .tip-amt{font-size:.68rem;color:var(--text2);margin-top:1px;}
 .tip-btn.selected .tip-amt{color:var(--accent);}
+.custom-tip-box{background:rgba(240,165,0,.07);border:1px solid var(--accent);border-radius:10px;padding:10px;margin-bottom:14px;}
+.custom-tip-display{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;}
+.custom-tip-display .ctd-label{font-size:.75rem;font-weight:700;color:var(--accent);}
+.custom-tip-display .ctd-value{font-size:1.3rem;font-weight:800;color:var(--text);letter-spacing:.04em;min-width:90px;text-align:right;}
+.tip-numpad{display:grid;grid-template-columns:repeat(3,1fr);gap:5px;}
+.tip-numpad-btn{background:var(--surface3);border:1px solid var(--border);border-radius:8px;padding:10px 4px;font-size:1rem;font-weight:700;cursor:pointer;text-align:center;color:var(--text);transition:background .1s;user-select:none;}
+.tip-numpad-btn:active{background:var(--surface2);}
+.tip-numpad-btn.backspace{color:var(--accent);}
+.tip-numpad-btn.clear-btn{color:#e55;font-size:.8rem;}
 .pay-methods{display:grid;grid-template-columns:1fr 1fr;gap:7px;margin-bottom:14px;}
 .pay-method{background:var(--surface2);border:2px solid var(--border);border-radius:10px;padding:12px 8px;cursor:pointer;text-align:center;transition:all .15s;}
 .pay-method:hover{border-color:var(--accent);}
@@ -718,7 +731,6 @@ input:checked+.toggle-track::after{left:23px;}
               <button class="btn btn-md btn-green" style="flex:1;font-size:.8rem" onclick="openCheckout()" id="checkoutBtn" disabled>💳 Checkout</button>
             </div>
             <div class="order-actions-row">
-              <button class="btn btn-md btn-accent" style="flex:1;font-size:.88rem" onclick="openCheckout()" id="quickCheckoutBtn" disabled>⚡ Quick Checkout</button>
               <button class="btn btn-md btn-purple" style="flex:1;font-size:.88rem" onclick="openSplitModal()" id="splitBtn" disabled>✂️ Split Bill</button>
             </div>
             <div class="order-actions-row">
@@ -1907,6 +1919,10 @@ let currentUser = null;
 let currentOrder = [];
 let activeTabId = null;
 let selectedTip = 18;
+let _customTipActive = false;
+let _customTipRaw = '';
+let _splitCustomActive = false;
+let _splitCustomRaw = '';
 let selectedPayMethod = 'tap';
 let checkoutTabId = null;
 let activeMainTab = 'drinks'; // 'drinks' or 'food'
@@ -2894,14 +2910,12 @@ function renderOrder(){
     container.innerHTML=lastRoundHtml+'<div class="order-empty"><div style="font-size:2rem">🍹</div><div>Tap items to add</div></div>';
     badge.style.display='none';
     document.getElementById('checkoutBtn').disabled=true;
-    document.getElementById('quickCheckoutBtn').disabled=true;
     document.getElementById('splitBtn').disabled=true;
     if(discBtn)discBtn.disabled=true;
   } else {
     const qty=currentOrder.reduce((s,i)=>s+i.qty,0);
     badge.textContent=qty;badge.style.display='';
     document.getElementById('checkoutBtn').disabled=false;
-    document.getElementById('quickCheckoutBtn').disabled=false;
     document.getElementById('splitBtn').disabled=false;
     if(discBtn)discBtn.disabled=false;
     container.innerHTML='';
@@ -3107,7 +3121,7 @@ let _seatPayIdx=0; // which seat is currently paying
 
 function openSplitModal(){
   if(currentOrder.length===0){showToast('No items to split','error');return;}
-  splitWays=2;splitPaid=0;_splitMode='equal';_seatAssignments={};_seatPayIdx=0;
+  splitWays=2;splitPaid=0;_splitMode='equal';_seatAssignments={};_seatPayIdx=0;_splitCustomActive=false;_splitCustomRaw='';
   splitOrderSnapshot=[...currentOrder];
   splitTabIdSnap=activeTabId||null;
   splitTipPct=18;splitPayMethod='tap';
@@ -3129,10 +3143,12 @@ function renderSplitConfig(){
       ${[2,3,4,5,6].map(n=>`<div class="split-way-btn ${n===splitWays?'selected':''}" onclick="setSplitWays(${n})"><div class="sw-num">${n}</div><div class="sw-label">ways</div></div>`).join('')}
     </div>
     <div class="section-label">Tip</div>
-    <div class="tip-options" style="margin-bottom:14px;">
+    <div class="tip-options" style="margin-bottom:8px;">
       ${settings.tips.map(p=>`<div class="tip-btn ${p===splitTipPct?'selected':''}" onclick="setSplitTip(${p})"><div class="tip-pct">${p}%</div><div class="tip-amt">$${(t.subtotal*p/100/splitWays).toFixed(2)}/ea</div></div>`).join('')}
-      <div class="tip-btn ${splitTipPct===0?'selected':''}" onclick="setSplitTip(0)"><div class="tip-pct">No Tip</div><div class="tip-amt">$0.00</div></div>
+
+      <div class="tip-btn ${_splitCustomActive?'selected':''}" onclick="openSplitCustomTip()"><div class="tip-pct">✏️</div><div class="tip-amt">Custom</div></div>
     </div>
+    ${_splitCustomActive?`<div class="custom-tip-box" style="margin-bottom:14px;">${_tipNumpad(_splitCustomRaw,'splitCustomNumpad')}</div>`:'<div style="margin-bottom:14px;"></div>'}
     <div class="charge-total">
       <div class="clabel">Per Person (${splitWays} ways)</div>
       <div class="amount">$${t.perPerson.toFixed(2)}</div>
@@ -3193,10 +3209,11 @@ function renderSeatConfig(){
     </div>
     <div style="font-size:.78rem;color:var(--text2);margin-bottom:8px;">Tap a seat number to assign each item. Tax &amp; tip split evenly across seats used.</div>
     <div class="section-label" style="margin-bottom:6px;">Tip</div>
-    <div class="tip-options" style="margin-bottom:10px;">
+    <div class="tip-options" style="margin-bottom:8px;">
       ${settings.tips.map(p=>`<div class="tip-btn ${p===splitTipPct?'selected':''}" onclick="setSplitTip(${p});renderSeatConfig()"><div class="tip-pct">${p}%</div><div class="tip-amt">$${(subtotal*p/100).toFixed(2)}</div></div>`).join('')}
-      <div class="tip-btn ${splitTipPct===0?'selected':''}" onclick="setSplitTip(0);renderSeatConfig()"><div class="tip-pct">No Tip</div><div class="tip-amt">$0.00</div></div>
+      <div class="tip-btn ${_splitCustomActive?'selected':''}" onclick="openSplitCustomTip(true)"><div class="tip-pct">✏️</div><div class="tip-amt">Custom</div></div>
     </div>
+    ${_splitCustomActive?`<div class="custom-tip-box" style="margin-bottom:10px;">${_tipNumpad(_splitCustomRaw,'seatCustomNumpad',true)}</div>`:'<div style="margin-bottom:10px;"></div>'}
     <div style="max-height:200px;overflow-y:auto;">${itemRows}</div>
     ${seatSummary}
     <div class="modal-footer" style="padding:0;border:none;margin-top:8px;">
@@ -3790,7 +3807,7 @@ function transferTab(tabId,toEmpId,toEmpName){
 function openCheckout(tabIdArg=null){
   _validateOrderPrices(); // PRICE DRIFT: check for changed prices since items were added
   if(currentOrder.length===0){showToast('No items to checkout','error');return;}
-  checkoutTabId=tabIdArg;selectedTip=18;selectedPayMethod='tap';_skipAutoGrat=false;
+  checkoutTabId=tabIdArg;selectedTip=18;selectedPayMethod='tap';_skipAutoGrat=false;_customTipActive=false;_customTipRaw='';_cashGivenRaw='';cancelPayCountdown();
   renderCheckoutBody();showModal('checkoutModal');
 }
 
@@ -3820,11 +3837,14 @@ function renderCheckoutBody(){
       <div class="checkout-total-row"><span>Tax (${settings.taxRate}%)</span><span>$${t.tax.toFixed(2)}</span></div>
       ${autoGrat>0?`<div class="checkout-total-row" style="color:var(--text2)"><span>Auto Gratuity (${settings.gratuityPct}%)</span><span>$${autoGrat.toFixed(2)} ${canSkipGrat?`<button onclick="skipAutoGrat()" style="font-size:.6rem;background:none;border:1px solid var(--red);color:var(--red);border-radius:4px;cursor:pointer;padding:1px 5px;margin-left:4px">Skip</button>`:''}</span></div>`:''}
     </div>
+    ${selectedPayMethod!=='cash'?`
     <div class="section-label">Tip</div>
     <div class="tip-options">
       ${settings.tips.map(p=>{const a=t.subtotal*p/100;return`<div class="tip-btn ${p===selectedTip?'selected':''}" onclick="selectTip(${p})"><div class="tip-pct">${p}%</div><div class="tip-amt">$${a.toFixed(2)}</div></div>`;}).join('')}
-      <div class="tip-btn ${selectedTip===0?'selected':''}" onclick="selectTip(0)"><div class="tip-pct">No Tip</div><div class="tip-amt">$0.00</div></div>
+      <div class="tip-btn ${_customTipActive?'selected':''}" onclick="openCustomTip()"><div class="tip-pct">✏️</div><div class="tip-amt">Custom</div></div>
     </div>
+    ${_customTipActive?`<div class="custom-tip-box">${_tipNumpad(_customTipRaw,'customTipNumpad')}</div>`:'<div style="margin-bottom:14px;"></div>'}
+    `:''}
     <div class="section-label">Payment Method</div>
     <div class="pay-methods" style="grid-template-columns:1fr 1fr 1fr;">
       <div class="pay-method ${selectedPayMethod==='tap'?'selected':''}" onclick="selPay('tap')"><div class="pm-icon">📱</div><div class="pm-label">Tap to Pay</div><div class="pm-sub">NFC / Apple / Google Pay</div></div>
@@ -3832,18 +3852,21 @@ function renderCheckoutBody(){
       <div class="pay-method ${selectedPayMethod==='cash'?'selected':''}" onclick="selPay('cash')"><div class="pm-icon">💵</div><div class="pm-label">Cash</div><div class="pm-sub">Calculate change</div></div>
     </div>
     ${selectedPayMethod==='cash'?`
-    <div class="section-label">Cash Tendered</div>
-    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:5px;margin-bottom:10px;">
-      ${[5,10,20,50,100].filter(b=>b>=finalTotal-0.01).slice(0,4).concat([20,50]).filter((b,i,a)=>a.indexOf(b)===i).slice(0,4).map(b=>`<button class="btn btn-sm btn-ghost" onclick="setCashTendered(${b})">$${b}</button>`).join('')}
-      <button class="btn btn-sm btn-ghost" onclick="setCashTendered(Math.ceil(${finalTotal}))">Exact</button>
+    <div class="section-label">Amount Given</div>
+    <div style="background:var(--surface2);border-radius:12px;padding:14px;margin-bottom:10px;">
+      <input id="cashTendered" type="number" inputmode="decimal" step="0.01" min="0"
+        placeholder="0.00"
+        value="${_cashGivenRaw||''}"
+        oninput="updateChange(${finalTotal})"
+        style="width:100%;background:transparent;border:none;outline:none;font-size:2.6rem;font-weight:800;color:var(--text);text-align:center;letter-spacing:.04em;margin-bottom:10px;-moz-appearance:textfield;">
+      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:5px;">
+        ${[5,10,20,50,100].filter(b=>b>=finalTotal-0.01).slice(0,3).map(b=>`<button class="btn btn-sm btn-ghost" onclick="setCashBill(${b},${finalTotal})">$${b}</button>`).join('')}
+        <button class="btn btn-sm btn-ghost" onclick="setCashExact(${finalTotal})">Exact</button>
+      </div>
     </div>
-    <div style="display:flex;gap:8px;align-items:center;margin-bottom:10px;">
-      <span style="font-size:.8rem;color:var(--text2);white-space:nowrap;">Amount given:</span>
-      <input class="form-input" id="cashTendered" type="number" step="0.01" min="${finalTotal.toFixed(2)}" placeholder="${finalTotal.toFixed(2)}" oninput="updateChange(${finalTotal})" style="flex:1;">
-    </div>
-    <div id="changeDisplay" style="background:var(--surface2);border-radius:8px;padding:10px;text-align:center;margin-bottom:12px;">
-      <div style="font-size:.75rem;color:var(--text2);">Change Due</div>
-      <div id="changeAmt" style="font-size:1.6rem;font-weight:700;color:var(--green);">$0.00</div>
+    <div id="changeDisplay" style="background:var(--surface2);border-radius:8px;padding:12px;text-align:center;margin-bottom:12px;">
+      <div style="font-size:.78rem;color:var(--text2);margin-bottom:2px;">Change Due</div>
+      <div id="changeAmt" style="font-size:2rem;font-weight:800;color:var(--green);">$0.00</div>
     </div>`:''}
     <div class="charge-total">
       <div class="clabel">Total Charge</div>
@@ -3851,14 +3874,40 @@ function renderCheckoutBody(){
       ${tip>0?`<div style="font-size:.72rem;color:var(--text2);margin-top:2px">includes $${tip.toFixed(2)} tip</div>`:''}
       ${autoGrat>0?`<div style="font-size:.72rem;color:var(--text2)">includes $${autoGrat.toFixed(2)} auto-gratuity</div>`:''}
     </div>
-    <button class="btn btn-green btn-lg" onclick="_onceTap(processPayment,this,4000)" id="processPayBtn">
-      ${selectedPayMethod==='tap'?'📱 Present Device to Reader':selectedPayMethod==='card'?'💳 Process Card':'💵 Complete Cash Payment'}
-    </button>
-    ${selectedPayMethod!=='cash'?'<div style="font-size:.7rem;color:var(--text2);text-align:center;margin-top:6px">⚠️ Simulation mode — Helcim key not connected</div>':''}`;
+    ${selectedPayMethod==='cash'
+      ? `<button class="btn btn-green btn-lg" onclick="_onceTap(processPayment,this,4000)" id="processPayBtn">💵 Complete Cash Payment</button>`
+      : `<button class="btn btn-green btn-lg btn-countdown" style="--cd-dur:4s" onclick="startPayCountdown(this)" id="processPayBtn">
+          ${selectedPayMethod==='tap'?'📱 Present Device to Reader':'💳 Process Card'} — ${_payCountdown>0?_payCountdown+'s…':'tap to begin'}
+        </button>
+        ${_payCountdown>0?`<button class="btn btn-lg btn-cancel-pay" onclick="cancelPayCountdown()">✕ Cancel</button>`:''}
+        <div style="font-size:.7rem;color:var(--text2);text-align:center;margin-top:6px">⚠️ Simulation mode — Helcim key not connected</div>`
+    }`;
 }
 
 let _skipAutoGrat=false;
+let _cashGivenRaw='';
 function skipAutoGrat(){_skipAutoGrat=true;renderCheckoutBody();}
+let _payCountdown=0, _payCountdownTimer=null;
+function startPayCountdown(btn){
+  if(_payCountdown>0)return;
+  _payCountdown=4;
+  renderCheckoutBody();
+  _payCountdownTimer=setInterval(()=>{
+    _payCountdown--;
+    if(_payCountdown<=0){
+      clearInterval(_payCountdownTimer);_payCountdownTimer=null;_payCountdown=0;
+      processPayment();
+    } else {
+      const b=document.getElementById('processPayBtn');
+      if(b)b.textContent=(selectedPayMethod==='tap'?'📱 Present Device to Reader':'💳 Process Card')+' — '+_payCountdown+'s…';
+    }
+  },1000);
+}
+function cancelPayCountdown(){
+  if(_payCountdownTimer){clearInterval(_payCountdownTimer);_payCountdownTimer=null;}
+  _payCountdown=0;
+  renderCheckoutBody();
+}
 
 function getAutoGratuity(subtotal){
   if(_skipAutoGrat)return 0;
@@ -3867,12 +3916,80 @@ function getAutoGratuity(subtotal){
   return subtotal*(settings.gratuityPct/100);
 }
 
-function selectTip(p){selectedTip=p;renderCheckoutBody();}
-function selPay(m){selectedPayMethod=m;renderCheckoutBody();}
+function selectTip(p){selectedTip=p;_customTipActive=false;renderCheckoutBody();}
+function selPay(m){selectedPayMethod=m;if(m==='cash'){selectedTip=0;_customTipActive=false;_customTipRaw='';_cashGivenRaw='';renderCheckoutBody();setTimeout(()=>{const el=document.getElementById('cashTendered');if(el)el.focus();},50);}else{renderCheckoutBody();}}
+function _tipNumpad(raw,id,isSeat=false){
+  const display=raw===''?'$0.00':'$'+(parseFloat(raw)||0).toFixed(2);
+  const keys=['1','2','3','4','5','6','7','8','9','⌫','0','.'];
+  const handler=id==='customTipNumpad'?`tipNumpadPress('${id}',v)`:`tipNumpadPress('${id}',v,${isSeat})`;
+  return `<div class="custom-tip-display"><span class="ctd-label">Custom Tip</span><span class="ctd-value">${display}</span></div>`+
+    `<div class="tip-numpad">${keys.map(k=>`<div class="tip-numpad-btn${k==='⌫'?' backspace':''}" onclick="tipNumpadPress('${id}','${k}',${isSeat})">${k}</div>`).join('')}</div>`;
+}
+function tipNumpadPress(id,key,isSeat=false){
+  const isMain=id==='customTipNumpad';
+  let raw=isMain?_customTipRaw:_splitCustomRaw;
+  if(key==='⌫'){raw=raw.slice(0,-1);}
+  else if(key==='.'){if(!raw.includes('.'))raw+=raw===''?'0.':'.'}
+  else{
+    const parts=raw.split('.');
+    if(parts.length>1&&parts[1].length>=2){}
+    else raw+=key;
+  }
+  if(isMain){
+    _customTipRaw=raw;
+    const n=parseFloat(raw)||0;
+    const sub=getOrderTotal(0).subtotal;
+    selectedTip=sub>0?Math.round(n/sub*10000)/100:0;
+    renderCheckoutBody();
+  } else {
+    _splitCustomRaw=raw;
+    const n=parseFloat(raw)||0;
+    const sub=splitOrderSnapshot.reduce((s,i)=>s+(i.comped?0:(i.price+(i.modTotal||0))*i.qty),0);
+    const pct=sub>0?Math.round(n/sub*10000)/100:0;
+    setSplitTip(pct);
+    isSeat?renderSeatConfig():renderSplitConfig();
+  }
+}
+function openCustomTip(){_customTipActive=true;_customTipRaw='';renderCheckoutBody();}
+function openSplitCustomTip(isSeat){_splitCustomActive=true;_splitCustomRaw='';isSeat?renderSeatConfig():renderSplitConfig();}
 
-function setCashTendered(amt){
+function cashNumpadPress(key,total){
+  let raw=_cashGivenRaw;
+  if(key==='⌫'){raw=raw.slice(0,-1);}
+  else if(key==='.'){if(!raw.includes('.'))raw+=raw===''?'0.':'.';}
+  else{const parts=raw.split('.');if(parts.length>1&&parts[1].length>=2){}else raw+=key;}
+  _cashGivenRaw=raw;
+  const n=parseFloat(raw)||0;
+  const disp=document.getElementById('cashGivenDisplay');
+  if(disp)disp.textContent='$'+n.toFixed(2);
   const el=document.getElementById('cashTendered');
-  if(el){el.value=amt.toFixed(2);el.dispatchEvent(new Event('input'));}
+  if(el)el.value=raw;
+  const changeEl=document.getElementById('changeAmt');
+  if(changeEl){const change=n-total;changeEl.textContent=change>=0?'$'+change.toFixed(2):'—';}
+}
+function setCashBill(amt,total){
+  _cashGivenRaw=amt.toFixed(2);
+  const disp=document.getElementById('cashGivenDisplay');
+  if(disp)disp.textContent='$'+amt.toFixed(2);
+  const el=document.getElementById('cashTendered');
+  if(el)el.value=_cashGivenRaw;
+  const changeEl=document.getElementById('changeAmt');
+  if(changeEl){const change=amt-total;changeEl.textContent=change>=0?'$'+change.toFixed(2):'—';}
+}
+function setCashExact(total){
+  _cashGivenRaw=total.toFixed(2);
+  const disp=document.getElementById('cashGivenDisplay');
+  if(disp)disp.textContent='$'+total.toFixed(2);
+  const el=document.getElementById('cashTendered');
+  if(el)el.value=_cashGivenRaw;
+  const changeEl=document.getElementById('changeAmt');
+  if(changeEl)changeEl.textContent='$0.00';
+}
+function setCashTendered(amt){
+  _cashGivenRaw=amt.toFixed(2);
+  const el=document.getElementById('cashTendered');
+  if(el){el.value=_cashGivenRaw;}
+  cashNumpadPress('',0);
 }
 function updateChange(total){
   const el=document.getElementById('cashTendered');
@@ -3969,12 +4086,17 @@ function processPayment(){
     document.getElementById('checkoutBody').innerHTML=`
       <div class="payment-success">
         <div class="success-icon">${isCash?'💵':'✅'}</div>
-        <div style="font-size:1.1rem;font-weight:700;color:var(--green)">${isCash?'Cash Received!':'Payment Approved!'}</div>
-        <div style="font-size:1.5rem;font-weight:700;color:var(--accent)">$${finalTotal.toFixed(2)}</div>
-        ${isCash?`<div style="background:var(--surface2);border-radius:8px;padding:12px 24px;margin-top:6px;text-align:center;width:100%">
-          <div style="display:flex;justify-content:space-between;font-size:.85rem;margin-bottom:4px"><span style="color:var(--text2)">Cash Given</span><span style="font-weight:700">$${cashTendered.toFixed(2)}</span></div>
-          <div style="display:flex;justify-content:space-between;font-size:1rem;font-weight:700;padding-top:6px;border-top:1px solid var(--border)"><span>Change Due</span><span style="color:var(--green);font-size:1.3rem">$${changeDue.toFixed(2)}</span></div>
-        </div>`:''}
+        ${isCash?`<div style="background:var(--surface2);border-radius:12px;padding:16px;margin-top:6px;text-align:center;width:100%">
+          <div style="font-size:.72rem;font-weight:600;color:var(--text2);text-transform:uppercase;letter-spacing:.08em;margin-bottom:4px;">Cash Received</div>
+          <div style="font-size:3rem;font-weight:900;color:var(--accent);letter-spacing:.02em;line-height:1;">$${finalTotal.toFixed(2)}</div>
+          <div style="border-top:1px solid var(--border);margin:14px 0 10px;"></div>
+          <div style="font-size:.72rem;font-weight:600;color:var(--text2);text-transform:uppercase;letter-spacing:.08em;margin-bottom:4px;">Cash Given</div>
+          <div style="font-size:3rem;font-weight:900;color:var(--text);letter-spacing:.02em;line-height:1;">$${cashTendered.toFixed(2)}</div>
+          <div style="border-top:1px solid var(--border);margin:14px 0 10px;"></div>
+          <div style="font-size:.72rem;font-weight:600;color:var(--text2);text-transform:uppercase;letter-spacing:.08em;margin-bottom:4px;">Change Due</div>
+          <div style="font-size:3.6rem;font-weight:900;color:var(--green);letter-spacing:.02em;line-height:1;">$${changeDue.toFixed(2)}</div>
+        </div>`:`<div style="font-size:1.1rem;font-weight:700;color:var(--green)">Payment Approved!</div><div style="font-size:1.5rem;font-weight:700;color:var(--accent)">$${finalTotal.toFixed(2)}</div>`}
+
         <div style="font-size:.78rem;color:var(--text2);margin-top:6px">${method} · ${new Date().toLocaleTimeString()} · ${currentUser.name}</div>
         <div style="display:flex;gap:7px;margin-top:10px;width:100%">
           <button class="btn btn-md btn-ghost" style="flex:1" onclick="finishPayment(false)">Done</button>
@@ -6183,7 +6305,7 @@ function showModal(id){document.getElementById(id).classList.remove('hidden');}
 function closeModal(id){
   document.getElementById(id).classList.add('hidden');
   if(id==='menuItemModal'){const dd=document.getElementById('emojiPickerDropdown');if(dd)dd.classList.add('hidden');document.removeEventListener('click',_epClose);}
-  if(id==='checkoutModal'&&checkoutTabId){_unlockTab(checkoutTabId);checkoutTabId=null;}
+  if(id==='checkoutModal'){cancelPayCountdown();if(checkoutTabId){_unlockTab(checkoutTabId);checkoutTabId=null;}}
 }
 document.querySelectorAll('.modal-overlay').forEach(o=>o.addEventListener('click',e=>{if(e.target===o)o.classList.add('hidden');}));
 
