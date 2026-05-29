@@ -2,137 +2,245 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>📊 Manager Dashboard</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Manager Dashboard</title>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
 <style>
-:root {
+:root{
   --bg:#0f0f13;--surface:#1a1a24;--surface2:#22222f;--surface3:#2a2a3a;
-  --accent:#f0a500;--green:#22c55e;--red:#ef4444;--blue:#3b82f6;
+  --accent:#f0a500;--green:#22c55e;--red:#ef4444;--blue:#3b82f6;--purple:#a855f7;
   --text:#f0f0f5;--text2:#9090a8;--border:#2e2e42;--radius:12px;
-  --manager:#3b82f6;
 }
 *{box-sizing:border-box;margin:0;padding:0;}
-body{background:var(--bg);color:var(--text);font-family:'Segoe UI',system-ui,sans-serif;min-height:100vh;overscroll-behavior:none;}
-
-/* ── SCREENS ── */
-.screen{display:none;min-height:100vh;align-items:center;justify-content:center;padding:24px;}
-.screen.active{display:flex;}
+body{background:var(--bg);color:var(--text);font-family:'Segoe UI',system-ui,sans-serif;min-height:100vh;-webkit-tap-highlight-color:transparent;}
+.hidden{display:none!important;}
+.screen{min-height:100vh;display:flex;flex-direction:column;}
 
 /* ── SETUP SCREEN ── */
-.setup-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:32px;width:100%;max-width:480px;}
-.setup-card h1{font-size:1.4rem;color:var(--accent);margin-bottom:6px;}
-.setup-card p{font-size:.88rem;color:var(--text2);margin-bottom:20px;line-height:1.6;}
-.setup-card textarea{width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:12px;font-family:monospace;font-size:.8rem;resize:vertical;min-height:160px;outline:none;}
-.setup-card textarea:focus{border-color:var(--accent);}
-.btn{border:none;border-radius:8px;cursor:pointer;font-weight:700;padding:12px 24px;font-size:.95rem;transition:all .15s;width:100%;margin-top:12px;}
-.btn-accent{background:var(--accent);color:#1a1a2e;}
-.btn-accent:hover{opacity:.88;}
-.err{color:var(--red);font-size:.82rem;margin-top:8px;display:none;}
+#setupScreen{align-items:center;justify-content:center;padding:24px;gap:20px;}
+.setup-logo{font-size:2rem;font-weight:800;color:var(--accent);text-align:center;}
+.setup-logo span{color:var(--text2);font-size:.9rem;font-weight:400;display:block;margin-top:4px;}
+.setup-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:20px;width:100%;max-width:420px;}
+.setup-card h2{font-size:.92rem;font-weight:700;margin-bottom:4px;}
+.setup-card p{font-size:.78rem;color:var(--text2);margin-bottom:14px;line-height:1.5;}
+.label{font-size:.78rem;font-weight:700;color:var(--text2);text-transform:uppercase;letter-spacing:.4px;margin-bottom:5px;display:block;}
+.input{width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:10px 12px;color:var(--text);font-size:.85rem;outline:none;}
+.input:focus{border-color:var(--accent);}
+textarea.input{resize:vertical;font-family:monospace;font-size:.75rem;}
+.btn{border:none;border-radius:10px;cursor:pointer;font-weight:700;padding:13px 18px;font-size:.9rem;width:100%;transition:all .15s;}
+.btn-accent{background:var(--accent);color:#000;}
+.btn-accent:hover{background:#ffb820;}
+.btn-ghost{background:var(--surface3);color:var(--text);}
+.btn-ghost:hover{background:var(--border);}
+.btn-red{background:var(--red);color:#fff;}
+.form-row{margin-bottom:14px;}
+.msg{font-size:.78rem;margin-top:10px;min-height:18px;}
+.msg.error{color:var(--red);}
+.msg.success{color:var(--green);}
 
 /* ── PIN SCREEN ── */
-.pin-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:32px;width:100%;max-width:360px;text-align:center;}
-.pin-card h2{font-size:1.1rem;color:var(--text2);margin-bottom:4px;}
-.pin-card h1{font-size:1.5rem;color:var(--accent);margin-bottom:20px;}
-.pin-dots{display:flex;gap:12px;justify-content:center;margin-bottom:20px;}
-.pin-dot{width:16px;height:16px;border-radius:50%;background:var(--surface3);border:2px solid var(--border);transition:all .15s;}
+#pinScreen{align-items:center;justify-content:center;padding:24px;gap:20px;}
+.pin-logo{font-size:1.6rem;font-weight:800;color:var(--accent);text-align:center;}
+.pin-logo span{font-size:.8rem;font-weight:400;color:var(--text2);display:block;margin-top:3px;}
+.pin-box{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:24px;width:100%;max-width:300px;}
+.pin-dots{display:flex;gap:12px;justify-content:center;margin:16px 0;}
+.pin-dot{width:14px;height:14px;border-radius:50%;border:2px solid var(--border);transition:all .15s;}
 .pin-dot.filled{background:var(--accent);border-color:var(--accent);}
-.pin-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:12px;}
-.pin-btn{background:var(--surface2);border:1px solid var(--border);border-radius:10px;color:var(--text);font-size:1.3rem;font-weight:700;padding:16px;cursor:pointer;transition:all .15s;}
-.pin-btn:active{background:var(--surface3);transform:scale(.95);}
-.pin-error{color:var(--red);font-size:.82rem;min-height:20px;margin-bottom:8px;}
-.pin-back{background:none;border:none;color:var(--text2);font-size:.82rem;cursor:pointer;margin-top:8px;text-decoration:underline;}
+.pin-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;}
+.pin-btn{background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:16px;font-size:1.25rem;font-weight:700;cursor:pointer;text-align:center;color:var(--text);transition:all .15s;}
+.pin-btn:hover{background:var(--surface3);}
+.pin-btn:active{background:var(--accent);color:#000;}
+.pin-btn.del{color:var(--red);}
+.pin-error{color:var(--red);font-size:.78rem;text-align:center;margin-top:10px;min-height:18px;}
+.pin-reset{background:none;border:none;color:var(--text2);font-size:.72rem;cursor:pointer;text-decoration:underline;margin-top:10px;display:block;text-align:center;width:100%;}
 
 /* ── DASHBOARD ── */
-#dashScreen{display:none;flex-direction:column;min-height:100vh;}
-#dashScreen.active{display:flex;}
-.dash-header{background:var(--surface);border-bottom:1px solid var(--border);padding:14px 20px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:10;}
-.dash-header-left{display:flex;align-items:center;gap:12px;}
-.dash-title{font-size:1.1rem;font-weight:700;color:var(--accent);}
-.dash-subtitle{font-size:.78rem;color:var(--text2);}
-.badge-ro{background:rgba(59,130,246,.15);color:var(--manager);font-size:.7rem;font-weight:700;padding:3px 10px;border-radius:20px;border:1px solid rgba(59,130,246,.3);}
-.dash-user{font-size:.82rem;color:var(--text2);}
-.btn-logout{background:var(--surface2);border:1px solid var(--border);border-radius:8px;color:var(--text2);font-size:.78rem;padding:6px 14px;cursor:pointer;font-weight:600;}
-.btn-logout:hover{color:var(--red);border-color:var(--red);}
+#dashScreen{background:var(--bg);}
+.dash-header{background:var(--surface);border-bottom:1px solid var(--border);padding:12px 16px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:10;}
+.dash-bar-name{font-size:1.05rem;font-weight:800;color:var(--accent);}
+.dash-meta{font-size:.7rem;color:var(--text2);margin-top:1px;}
+.dash-header-right{display:flex;align-items:center;gap:10px;}
+.live-dot{width:8px;height:8px;border-radius:50%;background:var(--green);animation:pulse 2s ease-in-out infinite;flex-shrink:0;}
+@keyframes pulse{0%,100%{opacity:1;transform:scale(1);}50%{opacity:.5;transform:scale(.85);}}
+.live-label{font-size:.7rem;font-weight:700;color:var(--green);}
+.logout-btn{background:var(--surface3);border:1px solid var(--border);border-radius:8px;padding:5px 10px;font-size:.72rem;color:var(--text2);cursor:pointer;font-weight:600;}
+.last-updated{font-size:.65rem;color:var(--text2);}
 
-.dash-body{padding:20px;display:flex;flex-direction:column;gap:20px;max-width:1100px;width:100%;margin:0 auto;}
+.dash-body{padding:12px;display:flex;flex-direction:column;gap:14px;max-width:600px;margin:0 auto;width:100%;}
 
-/* Stat row */
-.stat-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:14px;}
-.stat-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:18px 20px;}
-.stat-label{font-size:.75rem;color:var(--text2);font-weight:600;text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px;}
-.stat-value{font-size:1.9rem;font-weight:700;color:var(--accent);}
-.stat-value.green{color:var(--green);}
-.stat-value.blue{color:var(--blue);}
-.stat-sub{font-size:.75rem;color:var(--text2);margin-top:4px;}
+/* ── STAT CARDS ── */
+.stats-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:10px;}
+.stat-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:14px;}
+.stat-label{font-size:.67rem;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--text2);margin-bottom:4px;}
+.stat-value{font-size:1.55rem;font-weight:800;color:var(--accent);line-height:1;}
+.stat-sub{font-size:.7rem;color:var(--text2);margin-top:3px;}
+.stat-card.wide{grid-column:span 2;}
 
-/* Section */
-.section{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;}
-.section-header{padding:14px 18px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;}
-.section-title{font-size:.92rem;font-weight:700;color:var(--text);}
-.section-count{font-size:.78rem;color:var(--text2);}
-.section-body{padding:14px 18px;}
+/* ── SECTION HEADERS ── */
+.section-hd{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;}
+.section-title{font-size:.78rem;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--text2);}
+.section-badge{background:var(--surface3);border-radius:10px;padding:2px 8px;font-size:.7rem;font-weight:700;color:var(--accent);}
 
-/* Tabs list */
-.tab-item{display:flex;align-items:center;justify-content:space-between;padding:10px 0;border-bottom:1px solid var(--border);}
-.tab-item:last-child{border-bottom:none;}
-.tab-name{font-weight:600;font-size:.9rem;}
-.tab-meta{font-size:.75rem;color:var(--text2);margin-top:2px;}
-.tab-total{font-weight:700;color:var(--green);font-size:1rem;}
-.tab-status{font-size:.7rem;padding:2px 8px;border-radius:10px;font-weight:700;}
-.tab-status.open{background:rgba(34,197,94,.15);color:var(--green);}
+/* ── OPEN TABS ── */
+.tab-list{display:flex;flex-direction:column;gap:6px;}
+.tab-row{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:11px 13px;display:flex;align-items:center;justify-content:space-between;}
+.tab-row-left{flex:1;}
+.tab-name{font-size:.88rem;font-weight:700;}
+.tab-meta{font-size:.7rem;color:var(--text2);margin-top:2px;}
+.tab-total{font-size:.95rem;font-weight:800;color:var(--accent);}
+.tab-age{font-size:.67rem;color:var(--text2);margin-top:1px;text-align:right;}
+.tab-age.warn{color:#f59e0b;}
+.tab-age.alert{color:var(--red);}
+.empty-state{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:20px;text-align:center;color:var(--text2);font-size:.82rem;}
 
-/* Recent transactions */
-.tx-item{display:flex;align-items:center;justify-content:space-between;padding:9px 0;border-bottom:1px solid var(--border);}
-.tx-item:last-child{border-bottom:none;}
-.tx-name{font-size:.88rem;font-weight:600;}
-.tx-time{font-size:.73rem;color:var(--text2);}
-.tx-amount{font-weight:700;color:var(--text);}
-.tx-tip{font-size:.75rem;color:var(--green);}
+/* ── TIP BARS ── */
+.tip-list{display:flex;flex-direction:column;gap:8px;}
+.tip-row{display:flex;align-items:center;gap:10px;}
+.tip-emp{width:70px;font-size:.8rem;font-weight:700;flex-shrink:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.tip-bar-wrap{flex:1;background:var(--surface3);border-radius:4px;height:14px;overflow:hidden;}
+.tip-bar-fill{height:100%;background:linear-gradient(90deg,var(--accent),#ffb820);border-radius:4px;transition:width .5s ease;}
+.tip-amt{width:52px;text-align:right;font-size:.8rem;font-weight:700;color:var(--accent);flex-shrink:0;}
 
-/* Top items */
-.item-row{display:flex;align-items:center;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--border);}
-.item-row:last-child{border-bottom:none;}
-.item-name{font-size:.88rem;}
+/* ── HOURLY SALES ── */
+.hourly-chart{display:flex;align-items:flex-end;gap:4px;height:80px;padding:0 2px;}
+.hour-bar-wrap{flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;height:100%;}
+.hour-bar-col{flex:1;width:100%;display:flex;align-items:flex-end;}
+.hour-bar{width:100%;background:linear-gradient(180deg,var(--accent),#c47a00);border-radius:3px 3px 0 0;min-height:2px;transition:height .4s ease;}
+.hour-label{font-size:.6rem;color:var(--text2);white-space:nowrap;}
+.hour-amt{font-size:.58rem;color:var(--text2);white-space:nowrap;}
+
+/* ── RECENT TXS ── */
+.tx-list{display:flex;flex-direction:column;gap:5px;}
+.tx-row{background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:9px 12px;display:flex;align-items:center;justify-content:space-between;}
+.tx-left{flex:1;}
+.tx-tab{font-size:.82rem;font-weight:700;}
+.tx-meta{font-size:.7rem;color:var(--text2);margin-top:1px;}
+.tx-right{text-align:right;}
+.tx-total{font-size:.88rem;font-weight:800;color:var(--green);}
+.tx-time{font-size:.68rem;color:var(--text2);}
+.tx-voided{opacity:.45;text-decoration:line-through;}
+
+/* ── GOAL BAR ── */
+.goal-wrap{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:14px;}
+.goal-track{background:var(--surface3);border-radius:6px;height:12px;overflow:hidden;margin:8px 0;}
+.goal-fill{height:100%;border-radius:6px;transition:width .5s ease;}
+.goal-labels{display:flex;justify-content:space-between;font-size:.7rem;color:var(--text2);}
+
+/* ── TOP ITEMS ── */
+.item-list{display:flex;flex-direction:column;gap:5px;}
+.item-row{display:flex;align-items:center;gap:8px;background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:8px 11px;}
+.item-rank{font-size:.72rem;color:var(--text2);width:16px;text-align:center;flex-shrink:0;}
+.item-emoji{font-size:1.1rem;flex-shrink:0;}
+.item-name{flex:1;font-size:.82rem;font-weight:700;}
 .item-count{font-size:.78rem;color:var(--text2);}
-.item-rev{font-weight:700;color:var(--accent);font-size:.88rem;}
+.item-rev{font-size:.82rem;font-weight:700;color:var(--accent);}
 
-/* Staff */
-.staff-item{display:flex;align-items:center;gap:12px;padding:9px 0;border-bottom:1px solid var(--border);}
-.staff-item:last-child{border-bottom:none;}
-.staff-avatar{width:34px;height:34px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:.85rem;flex-shrink:0;}
-.staff-name{font-weight:600;font-size:.88rem;}
-.staff-role{font-size:.72rem;color:var(--text2);}
-.staff-since{font-size:.72rem;color:var(--text2);margin-left:auto;}
+/* ── OFFLINE NOTICE ── */
+.offline-notice{background:rgba(239,68,68,.1);border:1px solid rgba(239,68,68,.3);border-radius:8px;padding:8px 12px;font-size:.75rem;color:var(--red);font-weight:700;text-align:center;}
 
-/* Empty state */
-.empty{color:var(--text2);font-size:.85rem;text-align:center;padding:20px 0;}
+/* ── WALKOUT RISK ALERT ── */
+.walkout-alert{background:rgba(239,68,68,.12);border:1px solid var(--red);border-radius:10px;padding:10px 13px;display:flex;flex-direction:column;gap:6px;}
+.walkout-alert-hd{display:flex;align-items:center;gap:7px;font-size:.78rem;font-weight:800;color:var(--red);}
+.walkout-row{display:flex;justify-content:space-between;align-items:center;font-size:.75rem;background:rgba(239,68,68,.08);border-radius:7px;padding:6px 10px;}
+.walkout-name{font-weight:700;}
+.walkout-detail{color:var(--text2);}
+.walkout-amt{font-weight:800;color:var(--red);}
 
-/* Live dot */
-.live-dot{width:8px;height:8px;border-radius:50%;background:var(--green);display:inline-block;margin-right:6px;animation:pulse 2s infinite;}
-@keyframes pulse{0%,100%{opacity:1;}50%{opacity:.4;}}
+/* ── HAPPY HOUR BADGE ── */
+.hh-card{border-radius:var(--radius);padding:13px 14px;display:flex;align-items:center;justify-content:space-between;gap:10px;}
+.hh-card.active{background:linear-gradient(135deg,#1a1400,#2a1f00);border:1px solid var(--accent);}
+.hh-card.inactive{background:var(--surface);border:1px solid var(--border);}
+.hh-name{font-size:.88rem;font-weight:800;}
+.hh-sub{font-size:.72rem;color:var(--text2);margin-top:2px;}
+.hh-badge{border-radius:20px;padding:5px 12px;font-size:.75rem;font-weight:800;white-space:nowrap;flex-shrink:0;}
+.hh-badge.on{background:var(--accent);color:#000;}
+.hh-badge.off{background:var(--surface3);color:var(--text2);}
+.hh-countdown{font-size:.72rem;color:var(--accent);margin-top:3px;font-weight:700;}
 
-/* Last updated */
-.last-updated{font-size:.72rem;color:var(--text2);text-align:center;padding:8px 0 16px;}
+/* ── BAR vs KITCHEN SPLIT ── */
+.split-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:14px;}
+.split-row{display:flex;gap:10px;margin-top:10px;}
+.split-half{flex:1;background:var(--surface2);border-radius:10px;padding:10px 12px;text-align:center;}
+.split-half-label{font-size:.65rem;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--text2);margin-bottom:4px;}
+.split-half-val{font-size:1.25rem;font-weight:800;color:var(--accent);}
+.split-half-sub{font-size:.68rem;color:var(--text2);margin-top:2px;}
+.split-bar-track{background:var(--surface3);border-radius:4px;height:8px;overflow:hidden;margin-top:10px;display:flex;}
+.split-bar-drinks{background:var(--accent);height:100%;border-radius:4px 0 0 4px;transition:width .5s ease;}
+.split-bar-food{background:#f97316;height:100%;border-radius:0 4px 4px 0;transition:width .5s ease;}
 
-/* Responsive */
-@media(max-width:600px){
-  .stat-value{font-size:1.5rem;}
-  .dash-body{padding:12px;}
-  .stat-row{grid-template-columns:repeat(2,1fr);}
-}
+/* ── PAYMENT METHOD SPLIT ── */
+.pay-split-list{display:flex;flex-direction:column;gap:7px;}
+.pay-split-row{display:flex;align-items:center;gap:10px;}
+.pay-split-label{width:82px;font-size:.78rem;font-weight:700;flex-shrink:0;display:flex;align-items:center;gap:5px;}
+.pay-split-bar-wrap{flex:1;background:var(--surface3);border-radius:4px;height:14px;overflow:hidden;}
+.pay-split-fill{height:100%;border-radius:4px;transition:width .5s ease;}
+.pay-split-amt{width:58px;text-align:right;font-size:.75rem;font-weight:700;color:var(--text);flex-shrink:0;}
+.pay-split-pct{width:34px;text-align:right;font-size:.68rem;color:var(--text2);flex-shrink:0;}
+
+/* ── STAFF LEADERBOARD ── */
+.leader-list{display:flex;flex-direction:column;gap:6px;}
+.leader-row{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:10px 13px;display:flex;align-items:center;gap:10px;}
+.leader-rank{font-size:.75rem;font-weight:800;color:var(--text2);width:18px;text-align:center;flex-shrink:0;}
+.leader-rank.gold{color:#f0a500;}
+.leader-rank.silver{color:#9090a8;}
+.leader-rank.bronze{color:#c47a1e;}
+.leader-info{flex:1;}
+.leader-name{font-size:.85rem;font-weight:700;}
+.leader-sub{font-size:.68rem;color:var(--text2);margin-top:1px;}
+.leader-rev{font-size:.92rem;font-weight:800;color:var(--accent);}
+
+/* ── 7-DAY TREND ── */
+.trend-chart{display:flex;align-items:flex-end;gap:5px;height:80px;padding:0 2px;}
+.trend-bar-wrap{flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;height:100%;}
+.trend-bar-col{flex:1;width:100%;display:flex;align-items:flex-end;}
+.trend-bar{width:100%;border-radius:3px 3px 0 0;min-height:2px;transition:height .4s ease;}
+.trend-bar.today-bar{background:linear-gradient(180deg,var(--accent),#c47a00);}
+.trend-bar.past-bar{background:var(--surface3);}
+.trend-label{font-size:.6rem;color:var(--text2);white-space:nowrap;}
+.trend-label.today-lbl{color:var(--accent);font-weight:700;}
+
+/* ── COMPS & VOIDS ── */
+.cv-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;}
+.cv-card{background:var(--surface2);border-radius:10px;padding:11px 12px;text-align:center;}
+.cv-val{font-size:1.2rem;font-weight:800;}
+.cv-label{font-size:.65rem;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--text2);margin-top:3px;}
+.cv-sub{font-size:.68rem;color:var(--text2);margin-top:2px;}
+
+/* ── SHIFT NOTES ── */
+.note-feed{display:flex;flex-direction:column;gap:6px;}
+.note-item{background:var(--surface);border:1px solid var(--border);border-left:3px solid var(--accent);border-radius:0 10px 10px 0;padding:9px 12px;}
+.note-text{font-size:.82rem;line-height:1.45;}
+.note-meta{font-size:.67rem;color:var(--text2);margin-top:4px;}
+
+/* ── CONNECTION SPINNER ── */
+#connectingOverlay{position:fixed;inset:0;background:var(--bg);z-index:100;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;}
+.spinner{width:40px;height:40px;border:3px solid var(--border);border-top-color:var(--accent);border-radius:50%;animation:spin .8s linear infinite;}
+@keyframes spin{to{transform:rotate(360deg);}}
 </style>
 </head>
 <body>
 
-<!-- ── SETUP SCREEN ── -->
-<div class="screen active" id="setupScreen">
+<!-- ══════════════════════════════════════════════
+     CONNECTING OVERLAY
+══════════════════════════════════════════════ -->
+<div id="connectingOverlay" class="hidden">
+  <div class="spinner"></div>
+  <div style="color:var(--text2);font-size:.82rem;">Connecting to Firebase…</div>
+</div>
+
+<!-- ══════════════════════════════════════════════
+     SETUP SCREEN
+══════════════════════════════════════════════ -->
+<div id="setupScreen" class="screen hidden">
+  <div class="setup-logo">📊 Manager Dashboard<span>One-time setup — takes 30 seconds</span></div>
+
   <div class="setup-card">
-    <h1>📊 Manager Dashboard</h1>
-    <p>Share <strong>manager-dashboard.html</strong> with your managers. They'll paste the same Firebase config and enter their PIN to view live sales, tabs, and tips on any device — read-only.</p>
-    <label style="font-size:.82rem;color:var(--text2);display:block;margin-bottom:6px;">Firebase Config <span style="color:var(--text2);">(paste the full config object)</span></label>
-    <textarea id="fbConfigInput" placeholder='{
+    <h2>🔥 Firebase Config</h2>
+    <p>Paste the same Firebase config you entered in your POS settings. This is stored only on this device.</p>
+    <div class="form-row">
+      <label class="label">Firebase Config JSON</label>
+      <textarea class="input" id="setupConfig" rows="8" placeholder='{
   "apiKey": "AIza...",
   "authDomain": "your-app.firebaseapp.com",
   "databaseURL": "https://your-app-default-rtdb.firebaseio.com",
@@ -141,521 +249,1020 @@ body{background:var(--bg);color:var(--text);font-family:'Segoe UI',system-ui,san
   "messagingSenderId": "123456",
   "appId": "1:123:web:abc"
 }'></textarea>
-    <div class="err" id="setupErr"></div>
-    <button class="btn btn-accent" onclick="connectFirebase()">Connect & Continue →</button>
+    </div>
+    <button class="btn btn-accent" onclick="submitSetup()">Connect & Continue →</button>
+    <div class="msg" id="setupMsg"></div>
+  </div>
+
+  <div style="font-size:.72rem;color:var(--text2);text-align:center;max-width:340px;line-height:1.6;">
+    This dashboard is <strong style="color:var(--text)">read-only</strong> — it can view data but never modify tabs, transactions, or employee records.
   </div>
 </div>
 
-<!-- ── PIN SCREEN ── -->
-<div class="screen" id="pinScreen">
-  <div class="pin-card">
-    <h2>Manager Dashboard</h2>
-    <h1>Enter Your PIN</h1>
+<!-- ══════════════════════════════════════════════
+     PIN SCREEN
+══════════════════════════════════════════════ -->
+<div id="pinScreen" class="screen hidden">
+  <div class="pin-logo">📊 Manager View<span id="pinBarName">The Local</span></div>
+  <div class="pin-box">
+    <div style="font-size:.78rem;color:var(--text2);text-align:center;">Enter your dashboard PIN</div>
     <div class="pin-dots" id="pinDots">
-      <div class="pin-dot"></div>
-      <div class="pin-dot"></div>
-      <div class="pin-dot"></div>
-      <div class="pin-dot"></div>
+      <div class="pin-dot" id="pd0"></div>
+      <div class="pin-dot" id="pd1"></div>
+      <div class="pin-dot" id="pd2"></div>
+      <div class="pin-dot" id="pd3"></div>
+    </div>
+    <div class="pin-grid">
+      <button class="pin-btn" onclick="pp('1')">1</button>
+      <button class="pin-btn" onclick="pp('2')">2</button>
+      <button class="pin-btn" onclick="pp('3')">3</button>
+      <button class="pin-btn" onclick="pp('4')">4</button>
+      <button class="pin-btn" onclick="pp('5')">5</button>
+      <button class="pin-btn" onclick="pp('6')">6</button>
+      <button class="pin-btn" onclick="pp('7')">7</button>
+      <button class="pin-btn" onclick="pp('8')">8</button>
+      <button class="pin-btn" onclick="pp('9')">9</button>
+      <button class="pin-btn" onclick="pp('clr')" style="font-size:.75rem;color:var(--text2)">CLR</button>
+      <button class="pin-btn" onclick="pp('0')">0</button>
+      <button class="pin-btn del" onclick="pp('del')">⌫</button>
     </div>
     <div class="pin-error" id="pinError"></div>
-    <div class="pin-grid">
-      <button class="pin-btn" onclick="pinPress('1')">1</button>
-      <button class="pin-btn" onclick="pinPress('2')">2</button>
-      <button class="pin-btn" onclick="pinPress('3')">3</button>
-      <button class="pin-btn" onclick="pinPress('4')">4</button>
-      <button class="pin-btn" onclick="pinPress('5')">5</button>
-      <button class="pin-btn" onclick="pinPress('6')">6</button>
-      <button class="pin-btn" onclick="pinPress('7')">7</button>
-      <button class="pin-btn" onclick="pinPress('8')">8</button>
-      <button class="pin-btn" onclick="pinPress('9')">9</button>
-      <button class="pin-btn" onclick="pinClear()" style="color:var(--text2);">⌫</button>
-      <button class="pin-btn" onclick="pinPress('0')">0</button>
-      <button class="pin-btn" onclick="pinSubmit()" style="background:var(--accent);color:#1a1a2e;">✓</button>
-    </div>
-    <button class="pin-back" onclick="goToSetup()">← Change Firebase Config</button>
+    <button class="pin-reset" onclick="resetSetup()">← Change Firebase config</button>
   </div>
 </div>
 
-<!-- ── DASHBOARD SCREEN ── -->
-<div id="dashScreen">
+<!-- ══════════════════════════════════════════════
+     DASHBOARD SCREEN
+══════════════════════════════════════════════ -->
+<div id="dashScreen" class="screen hidden">
   <div class="dash-header">
-    <div class="dash-header-left">
-      <div>
-        <div class="dash-title">📊 Manager Dashboard <span class="live-dot"></span></div>
-        <div class="dash-subtitle" id="dashBarName">George &amp; Walt's</div>
-      </div>
-      <span class="badge-ro">READ ONLY</span>
+    <div>
+      <div class="dash-bar-name" id="dashBarName">The Local</div>
+      <div class="dash-meta" id="dashDate"></div>
     </div>
-    <div style="display:flex;align-items:center;gap:12px;">
-      <span class="dash-user" id="dashUserName"></span>
-      <button class="btn-logout" onclick="logout()">Log Out</button>
+    <div class="dash-header-right">
+      <div class="live-dot" id="liveDot"></div>
+      <span class="live-label" id="liveLabel">Live</span>
+      <span class="last-updated" id="lastUpdated"></span>
+      <button class="logout-btn" onclick="dashLogout()">Lock</button>
     </div>
   </div>
 
   <div class="dash-body">
-    <!-- Stat cards -->
-    <div class="stat-row">
+
+    <!-- offline notice -->
+    <div class="offline-notice hidden" id="offlineNotice">📵 Connection lost — showing last known data</div>
+
+    <!-- WALKOUT RISK ALERT -->
+    <div id="walkoutAlert" class="hidden"></div>
+
+    <!-- STAT CARDS -->
+    <div class="stats-grid">
       <div class="stat-card">
-        <div class="stat-label">Today's Revenue</div>
-        <div class="stat-value green" id="statRevenue">$0.00</div>
+        <div class="stat-label">Revenue Today</div>
+        <div class="stat-value" id="statRevenue">$0</div>
         <div class="stat-sub" id="statTxCount">0 transactions</div>
       </div>
       <div class="stat-card">
-        <div class="stat-label">Today's Tips</div>
-        <div class="stat-value" id="statTips">$0.00</div>
-        <div class="stat-sub" id="statTipCount">0 tipped</div>
-      </div>
-      <div class="stat-card">
         <div class="stat-label">Open Tabs</div>
-        <div class="stat-value blue" id="statOpenTabs">0</div>
-        <div class="stat-sub" id="statTabTotal">$0.00 running total</div>
+        <div class="stat-value" id="statTabs">0</div>
+        <div class="stat-sub" id="statTabValue">$0.00 on tables</div>
       </div>
       <div class="stat-card">
-        <div class="stat-label">Staff On Shift</div>
-        <div class="stat-value" id="statStaff">0</div>
-        <div class="stat-sub">currently logged in</div>
+        <div class="stat-label">Tips Today</div>
+        <div class="stat-value" id="statTips">$0</div>
+        <div class="stat-sub" id="statAvgTip">avg 0%</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Avg Ticket</div>
+        <div class="stat-value" id="statAvgTicket">$0</div>
+        <div class="stat-sub" id="statLastSale">No sales yet</div>
+      </div>
+      <!-- Sales Pace -->
+      <div class="stat-card">
+        <div class="stat-label">Sales Pace</div>
+        <div class="stat-value" id="statPace">—</div>
+        <div class="stat-sub" id="statPaceSub">projected by midnight</div>
+      </div>
+      <!-- Comps & Voids summary -->
+      <div class="stat-card">
+        <div class="stat-label">Comps &amp; Voids</div>
+        <div class="stat-value" id="statCompVoid" style="color:var(--red);">$0</div>
+        <div class="stat-sub" id="statCompVoidSub">0 comps · 0 voids</div>
       </div>
     </div>
 
-    <!-- Two column layout -->
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;" id="twoCol">
-
-      <!-- Open Tabs -->
-      <div class="section">
-        <div class="section-header">
-          <span class="section-title">🍺 Open Tabs</span>
-          <span class="section-count" id="tabsCount">0 open</span>
-        </div>
-        <div class="section-body" id="tabsList">
-          <div class="empty">No open tabs</div>
-        </div>
+    <!-- DAILY GOAL -->
+    <div class="goal-wrap" id="goalSection" style="display:none;">
+      <div style="display:flex;justify-content:space-between;align-items:center;">
+        <div style="font-size:.78rem;font-weight:700;">🎯 Daily Goal</div>
+        <div style="font-size:.78rem;font-weight:700;color:var(--accent);" id="goalPct">0%</div>
       </div>
-
-      <!-- Recent Transactions -->
-      <div class="section">
-        <div class="section-header">
-          <span class="section-title">💳 Recent Transactions</span>
-          <span class="section-count" id="txCount">Today</span>
-        </div>
-        <div class="section-body" id="txList">
-          <div class="empty">No transactions today</div>
-        </div>
+      <div class="goal-track">
+        <div class="goal-fill" id="goalFill" style="width:0%;background:var(--green);"></div>
       </div>
-
+      <div class="goal-labels">
+        <span id="goalCurrent">$0</span>
+        <span id="goalTarget">Goal: $0</span>
+      </div>
     </div>
 
-    <!-- Two column layout row 2 -->
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;">
-
-      <!-- Top Items -->
-      <div class="section">
-        <div class="section-header">
-          <span class="section-title">🔥 Top Items Today</span>
-        </div>
-        <div class="section-body" id="topItemsList">
-          <div class="empty">No sales data yet</div>
-        </div>
+    <!-- HAPPY HOUR STATUS -->
+    <div>
+      <div class="section-hd">
+        <div class="section-title">🍺 Happy Hour</div>
       </div>
-
-      <!-- Staff On Shift -->
-      <div class="section">
-        <div class="section-header">
-          <span class="section-title">👥 Staff On Shift</span>
-        </div>
-        <div class="section-body" id="staffList">
-          <div class="empty">No staff logged in</div>
-        </div>
-      </div>
-
+      <div id="happyHourCard"></div>
     </div>
 
-    <div class="last-updated" id="lastUpdated">Connecting...</div>
+    <!-- BAR vs KITCHEN SPLIT -->
+    <div class="split-card">
+      <div style="display:flex;align-items:center;justify-content:space-between;">
+        <div style="font-size:.78rem;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--text2);">🍺 Bar vs 🍳 Kitchen</div>
+        <div style="font-size:.7rem;color:var(--text2);" id="splitTotal">$0 total</div>
+      </div>
+      <div class="split-row">
+        <div class="split-half">
+          <div class="split-half-label">🍺 Bar</div>
+          <div class="split-half-val" id="splitBarVal">$0</div>
+          <div class="split-half-sub" id="splitBarPct">0%</div>
+        </div>
+        <div class="split-half">
+          <div class="split-half-label">🍳 Kitchen</div>
+          <div class="split-half-val" id="splitKitVal" style="color:#f97316;">$0</div>
+          <div class="split-half-sub" id="splitKitPct">0%</div>
+        </div>
+      </div>
+      <div class="split-bar-track">
+        <div class="split-bar-drinks" id="splitBarFill" style="width:50%;"></div>
+        <div class="split-bar-food" id="splitKitFill" style="width:50%;"></div>
+      </div>
+    </div>
+
+    <!-- PAYMENT METHOD SPLIT -->
+    <div>
+      <div class="section-hd">
+        <div class="section-title">💳 Payment Methods</div>
+        <div style="font-size:.7rem;color:var(--text2);" id="payMethodTotal"></div>
+      </div>
+      <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:12px;">
+        <div class="pay-split-list" id="payMethodList">
+          <div style="color:var(--text2);font-size:.78rem;text-align:center;padding:8px 0;">No transactions yet</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- HOURLY SALES -->
+    <div>
+      <div class="section-hd">
+        <div class="section-title">⏱ Hourly Sales</div>
+        <div style="font-size:.7rem;color:var(--text2);" id="hourlySub"></div>
+      </div>
+      <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:12px 8px;">
+        <div class="hourly-chart" id="hourlyChart"></div>
+      </div>
+    </div>
+
+    <!-- 7-DAY TREND -->
+    <div>
+      <div class="section-hd">
+        <div class="section-title">📈 7-Day Trend</div>
+        <div style="font-size:.7rem;color:var(--text2);" id="trendSub"></div>
+      </div>
+      <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:12px 8px;">
+        <div class="trend-chart" id="trendChart"></div>
+      </div>
+    </div>
+
+    <!-- STAFF LEADERBOARD -->
+    <div>
+      <div class="section-hd">
+        <div class="section-title">🏅 Staff Leaderboard</div>
+        <div style="font-size:.7rem;color:var(--text2);">Revenue today</div>
+      </div>
+      <div class="leader-list" id="leaderList">
+        <div class="empty-state">No sales yet</div>
+      </div>
+    </div>
+
+    <!-- OPEN TABS -->
+    <div>
+      <div class="section-hd">
+        <div class="section-title">📋 Open Tabs</div>
+        <div class="section-badge" id="tabsBadge">0</div>
+      </div>
+      <div class="tab-list" id="tabList">
+        <div class="empty-state">No open tabs</div>
+      </div>
+    </div>
+
+    <!-- TIP BREAKDOWN -->
+    <div>
+      <div class="section-hd">
+        <div class="section-title">💰 Tips by Employee</div>
+        <div style="font-size:.7rem;color:var(--accent);font-weight:700;" id="tipsTotal">$0 total</div>
+      </div>
+      <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:12px;">
+        <div class="tip-list" id="tipList">
+          <div style="color:var(--text2);font-size:.78rem;text-align:center;padding:8px 0;">No tips recorded yet</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- TOP ITEMS -->
+    <div>
+      <div class="section-hd">
+        <div class="section-title">🏆 Top Items Today</div>
+      </div>
+      <div class="item-list" id="topItemsList">
+        <div class="empty-state">No sales yet</div>
+      </div>
+    </div>
+
+    <!-- RECENT TRANSACTIONS -->
+    <div>
+      <div class="section-hd">
+        <div class="section-title">🧾 Recent Sales</div>
+        <div style="font-size:.7rem;color:var(--text2);">Last 10</div>
+      </div>
+      <div class="tx-list" id="recentTxList">
+        <div class="empty-state">No transactions today</div>
+      </div>
+    </div>
+
+    <!-- SHIFT NOTES -->
+    <div>
+      <div class="section-hd">
+        <div class="section-title">📝 Shift Notes</div>
+        <div style="font-size:.7rem;color:var(--text2);">From POS</div>
+      </div>
+      <div class="note-feed" id="notesFeed">
+        <div class="empty-state">No notes this shift</div>
+      </div>
+    </div>
+
+    <div style="height:20px;"></div>
   </div>
 </div>
 
 <script>
-// ── State ──────────────────────────────────────────────────────────────────
-let _db       = null;
-let _employees = [];
-let _currentUser = null;
-let _pinBuffer = '';
-let _pinFails  = 0;
-let _pinLocked = false;
+// ═══════════════════════════════════════════════════
+//  STATE
+// ═══════════════════════════════════════════════════
+let _fbDb   = null;
+let _data   = { settings:{}, tabs:[], transactions:[], employees:[], shiftNotes:[] };
+let _pinBuf = '';
+let _authed = sessionStorage.getItem('dash_authed') === '1';
+let _refreshTimer = null;
 
-const _ALLOWED_ROLES = ['owner', 'manager', 'dev'];
+// ═══════════════════════════════════════════════════
+//  BOOT
+// ═══════════════════════════════════════════════════
+// ── FIREBASE CONFIG (baked in — connects automatically on load) ──────────────
+const _FIREBASE_CONFIG = Object.freeze({
+  apiKey:            "AIzaSyB4sQuU_LdbeovGdY2EG70bXSGRSUvi-MI",
+  authDomain:        "george-and-walts-pos.firebaseapp.com",
+  databaseURL:       "https://george-and-walts-pos-default-rtdb.firebaseio.com",
+  projectId:         "george-and-walts-pos",
+  storageBucket:     "george-and-walts-pos.firebasestorage.app",
+  messagingSenderId: "205916033089",
+  appId:             "1:205916033089:web:6da21282d9e65f0cc136c0",
+  measurementId:     "G-NREK25VN4Q"
+});
 
-// ── Helpers ────────────────────────────────────────────────────────────────
-function _safe(fn, fallback) {
-  try { return fn(); } catch(e) { return fallback; }
-}
+(function boot(){
+  // Always use baked-in config — seed localStorage so setup screen stays hidden
+  localStorage.setItem('dash_fb_config', JSON.stringify(_FIREBASE_CONFIG));
+  show('connectingOverlay');
+  initFirebase(_FIREBASE_CONFIG);
+})();
 
-function _fmt(n) {
-  return '$' + (Number(n) || 0).toFixed(2);
-}
-
-function _today() {
-  return new Date().toDateString();
-}
-
-function _timeAgo(isoStr) {
-  if (!isoStr) return '';
-  const diff = Date.now() - new Date(isoStr).getTime();
-  const m = Math.floor(diff / 60000);
-  if (m < 1)  return 'just now';
-  if (m < 60) return m + 'm ago';
-  const h = Math.floor(m / 60);
-  if (h < 24) return h + 'h ago';
-  return Math.floor(h / 24) + 'd ago';
-}
-
-function _showScreen(id) {
-  ['setupScreen','pinScreen','dashScreen'].forEach(s => {
-    const el = document.getElementById(s);
-    if (el) {
-      el.classList.remove('active');
-      if (s === 'dashScreen') el.style.display = 'none';
-    }
+function show(id){
+  ['setupScreen','pinScreen','dashScreen','connectingOverlay'].forEach(s=>{
+    document.getElementById(s).classList.toggle('hidden', s!==id);
   });
-  const target = document.getElementById(id);
-  if (!target) return;
-  if (id === 'dashScreen') {
-    target.style.display = 'flex';
-    target.classList.add('active');
-  } else {
-    target.classList.add('active');
-  }
 }
 
-// ── Firebase Setup ─────────────────────────────────────────────────────────
-function connectFirebase() {
-  const raw = document.getElementById('fbConfigInput').value.trim();
-  const errEl = document.getElementById('setupErr');
-  errEl.style.display = 'none';
-
+// ═══════════════════════════════════════════════════
+//  SETUP
+// ═══════════════════════════════════════════════════
+function submitSetup(){
+  const raw = document.getElementById('setupConfig').value.trim();
+  const msg = document.getElementById('setupMsg');
+  msg.className='msg';msg.textContent='';
   let cfg;
-  try {
-    // Strip JS variable wrapper if present e.g. "const firebaseConfig = {...}"
-    let cleaned = raw.replace(/^[\s\S]*?(\{)/, '$1').trim();
-    // Remove trailing semicolon if any
-    cleaned = cleaned.replace(/;+\s*$/, '').trim();
-    // Convert single-quoted keys/values to double quotes (JS object format)
-    cleaned = cleaned.replace(/'/g, '"');
-    // Add quotes to unquoted keys e.g. apiKey: → "apiKey":
-    cleaned = cleaned.replace(/([{,]\s*)([a-zA-Z0-9_]+)\s*:/g, '$1"$2":');
-    cfg = JSON.parse(cleaned);
-  } catch(e) {
-    errEl.textContent = 'Invalid config — paste the full firebaseConfig object from Firebase console.';
-    errEl.style.display = 'block';
-    return;
+  try{
+    cfg = JSON.parse(raw);
+  }catch(e){
+    msg.className='msg error';msg.textContent='Invalid JSON — check your config.';return;
   }
-
-  if (!cfg.databaseURL) {
-    errEl.textContent = 'Missing databaseURL — make sure Realtime Database is enabled in your Firebase project.';
-    errEl.style.display = 'block';
-    return;
+  if(!cfg.databaseURL){
+    msg.className='msg error';msg.textContent='Missing "databaseURL" field.';return;
   }
+  msg.className='msg';msg.textContent='Connecting…';
+  localStorage.setItem('dash_fb_config', JSON.stringify(cfg));
+  show('connectingOverlay');
+  initFirebase(cfg);
+}
 
-  try {
-    // Initialize Firebase (avoid duplicate app error)
+function resetSetup(){
+  localStorage.removeItem('dash_fb_config');
+  sessionStorage.removeItem('dash_authed');
+  if(_fbDb){try{firebase.app().delete();}catch(e){}_fbDb=null;}
+  document.getElementById('setupConfig').value='';
+  document.getElementById('setupMsg').textContent='';
+  show('setupScreen');
+}
+
+// ═══════════════════════════════════════════════════
+//  FIREBASE
+// ═══════════════════════════════════════════════════
+function initFirebase(cfg){
+  try{
     let app;
-    try { app = firebase.app('mgr-dash'); }
-    catch(e) { app = firebase.initializeApp(cfg, 'mgr-dash'); }
-    _db = firebase.database(app);
+    try{app=firebase.app();}
+    catch(e){app=firebase.initializeApp(cfg);}
+    _fbDb = firebase.database(app);
 
-    // Test connection by reading employees
-    _db.ref('employees').once('value').then(snap => {
-      const data = snap.val();
-      if (data === null) {
-        // No employees yet — still valid connection
-        _employees = [];
-      } else if (typeof data === 'object') {
-        _employees = Array.isArray(data) ? data.filter(Boolean) : Object.values(data);
-      }
-
-      // Save config for session
-      _safe(() => sessionStorage.setItem('mgr_fb_cfg', JSON.stringify(cfg)));
-      _showScreen('pinScreen');
-
-    }).catch(err => {
-      errEl.textContent = 'Could not connect to Firebase. Check your config and database rules.';
-      errEl.style.display = 'block';
+    // connection health
+    _fbDb.ref('.info/connected').on('value', snap=>{
+      const c = snap.val()===true;
+      const dot = document.getElementById('liveDot');
+      const lbl = document.getElementById('liveLabel');
+      const notice = document.getElementById('offlineNotice');
+      if(dot) dot.style.background = c ? 'var(--green)' : 'var(--red)';
+      if(lbl){ lbl.textContent = c ? 'Live' : 'Reconnecting'; lbl.style.color = c ? 'var(--green)' : 'var(--red)'; }
+      if(notice) notice.classList.toggle('hidden', c);
     });
 
-  } catch(e) {
-    errEl.textContent = 'Firebase error: ' + e.message;
-    errEl.style.display = 'block';
-  }
-}
+    // Load settings first for PIN check
+    _fbDb.ref('settings').once('value', snap=>{
+      const d = snap.val();
+      if(d) _data.settings = d;
+      const barName = _data.settings.barName || 'The Local';
+      document.getElementById('pinBarName').textContent = barName;
+      document.getElementById('dashBarName').textContent = barName;
 
-function goToSetup() {
-  _showScreen('setupScreen');
-}
-
-// ── PIN Logic ──────────────────────────────────────────────────────────────
-function updatePinDots() {
-  const dots = document.querySelectorAll('.pin-dot');
-  dots.forEach((d, i) => d.classList.toggle('filled', i < _pinBuffer.length));
-}
-
-function pinPress(digit) {
-  if (_pinLocked || _pinBuffer.length >= 4) return;
-  _pinBuffer += digit;
-  updatePinDots();
-  if (_pinBuffer.length === 4) setTimeout(pinSubmit, 100);
-}
-
-function pinClear() {
-  _pinBuffer = _pinBuffer.slice(0, -1);
-  updatePinDots();
-}
-
-function pinSubmit() {
-  if (_pinLocked) return;
-  const errEl = document.getElementById('pinError');
-
-  const match = _employees.find(e =>
-    e && e.pin === _pinBuffer && _ALLOWED_ROLES.includes(e.role)
-  );
-
-  if (match) {
-    _currentUser = match;
-    _pinFails = 0;
-    _pinBuffer = '';
-    updatePinDots();
-    errEl.textContent = '';
-    document.getElementById('dashUserName').textContent = match.name + ' (' + match.role + ')';
-    _showScreen('dashScreen');
-    startDashboard();
-  } else {
-    _pinFails++;
-    _pinBuffer = '';
-    updatePinDots();
-
-    if (_pinFails >= 5) {
-      _pinLocked = true;
-      errEl.textContent = 'Too many attempts — locked for 30 seconds.';
-      setTimeout(() => { _pinLocked = false; _pinFails = 0; errEl.textContent = ''; }, 30000);
-    } else {
-      const rem = 5 - _pinFails;
-      const workerTried = _employees.find(e => e && e.pin === _pinBuffer);
-      if (workerTried && !_ALLOWED_ROLES.includes(workerTried.role)) {
-        errEl.textContent = 'Staff PINs cannot access the manager dashboard.';
+      if(_authed){
+        setupListeners();
+        show('dashScreen');
+        startClock();
       } else {
-        errEl.textContent = 'Incorrect PIN. ' + rem + ' attempt' + (rem === 1 ? '' : 's') + ' remaining.';
+        show('pinScreen');
       }
-      setTimeout(() => { errEl.textContent = ''; }, 3000);
-    }
-  }
-}
-
-function logout() {
-  _currentUser = null;
-  _pinBuffer = '';
-  updatePinDots();
-  // Detach all Firebase listeners
-  if (_db) {
-    _db.ref('tabs').off();
-    _db.ref('transactions').off();
-    _db.ref('sessions').off();
-  }
-  _showScreen('pinScreen');
-}
-
-// ── Dashboard ──────────────────────────────────────────────────────────────
-function startDashboard() {
-  if (!_db) return;
-
-  // Listen to tabs
-  _db.ref('tabs').on('value', snap => {
-    const data = snap.val() || {};
-    const tabs = Array.isArray(data) ? data.filter(Boolean) : Object.values(data);
-    renderTabs(tabs.filter(t => t && t.open !== false));
-  });
-
-  // Listen to transactions
-  _db.ref('transactions').on('value', snap => {
-    const data = snap.val() || {};
-    const txs = Array.isArray(data) ? data.filter(Boolean) : Object.values(data);
-    renderTransactions(txs);
-  });
-
-  // Listen to active sessions (staff on shift)
-  _db.ref('sessions').on('value', snap => {
-    const data = snap.val() || {};
-    const sessions = Array.isArray(data) ? data.filter(Boolean) : Object.values(data);
-    renderStaff(sessions);
-  });
-}
-
-// ── Render: Tabs ───────────────────────────────────────────────────────────
-function renderTabs(tabs) {
-  const listEl = document.getElementById('tabsList');
-  const countEl = document.getElementById('tabsCount');
-  const statEl  = document.getElementById('statOpenTabs');
-  const totalEl = document.getElementById('statTabTotal');
-
-  statEl.textContent = tabs.length;
-  countEl.textContent = tabs.length + ' open';
-
-  const runningTotal = tabs.reduce((s, t) => s + (_safe(() => Number(t.total) || 0, 0)), 0);
-  totalEl.textContent = _fmt(runningTotal) + ' running total';
-
-  if (!tabs.length) {
-    listEl.innerHTML = '<div class="empty">No open tabs</div>';
-    return;
-  }
-
-  // Sort by total descending
-  tabs.sort((a, b) => (Number(b.total) || 0) - (Number(a.total) || 0));
-
-  listEl.innerHTML = tabs.slice(0, 12).map(t => `
-    <div class="tab-item">
-      <div>
-        <div class="tab-name">${_esc(t.name || 'Unknown')}</div>
-        <div class="tab-meta">${_safe(() => t.items ? t.items.length + ' item' + (t.items.length !== 1 ? 's' : '') : '0 items', '0 items')} · ${_timeAgo(t.openedAt)}</div>
-      </div>
-      <div style="text-align:right;">
-        <div class="tab-total">${_fmt(t.total)}</div>
-        <span class="tab-status open">Open</span>
-      </div>
-    </div>
-  `).join('');
-}
-
-// ── Render: Transactions ───────────────────────────────────────────────────
-function renderTransactions(allTxs) {
-  const listEl  = document.getElementById('txList');
-  const countEl = document.getElementById('txCount');
-
-  // Filter to today
-  const todayTxs = allTxs.filter(t => t && _safe(() => new Date(t.closedAt || t.date || t.ts).toDateString() === _today(), false));
-  todayTxs.sort((a, b) => new Date(b.closedAt || b.date || b.ts || 0) - new Date(a.closedAt || a.date || a.ts || 0));
-
-  // Stats
-  const totalRev  = todayTxs.reduce((s, t) => s + (_safe(() => Number(t.total) || 0, 0)), 0);
-  const totalTips = todayTxs.reduce((s, t) => s + (_safe(() => Number(t.tip) || 0, 0)), 0);
-  const tippedCount = todayTxs.filter(t => Number(t.tip) > 0).length;
-
-  document.getElementById('statRevenue').textContent  = _fmt(totalRev);
-  document.getElementById('statTxCount').textContent  = todayTxs.length + ' transaction' + (todayTxs.length !== 1 ? 's' : '');
-  document.getElementById('statTips').textContent     = _fmt(totalTips);
-  document.getElementById('statTipCount').textContent = tippedCount + ' tipped';
-  countEl.textContent = 'Today (' + todayTxs.length + ')';
-
-  if (!todayTxs.length) {
-    listEl.innerHTML = '<div class="empty">No transactions today</div>';
-  } else {
-    listEl.innerHTML = todayTxs.slice(0, 12).map(t => `
-      <div class="tx-item">
-        <div>
-          <div class="tx-name">${_esc(t.name || t.tabName || 'Guest')}</div>
-          <div class="tx-time">${_timeAgo(t.closedAt || t.date || t.ts)} · ${_esc(t.payMethod || t.method || '')}</div>
-        </div>
-        <div style="text-align:right;">
-          <div class="tx-amount">${_fmt(t.total)}</div>
-          ${Number(t.tip) > 0 ? `<div class="tx-tip">tip: ${_fmt(t.tip)}</div>` : ''}
-        </div>
-      </div>
-    `).join('');
-  }
-
-  // Top items
-  renderTopItems(todayTxs);
-
-  // Last updated
-  document.getElementById('lastUpdated').textContent = '🟢 Live · Last updated ' + new Date().toLocaleTimeString();
-}
-
-// ── Render: Top Items ──────────────────────────────────────────────────────
-function renderTopItems(todayTxs) {
-  const listEl = document.getElementById('topItemsList');
-  const counts = {};
-
-  todayTxs.forEach(tx => {
-    _safe(() => {
-      const items = tx.items || [];
-      items.forEach(item => {
-        if (!item || !item.name) return;
-        const key = item.name;
-        if (!counts[key]) counts[key] = { qty: 0, rev: 0 };
-        const qty = Number(item.qty) || 1;
-        counts[key].qty += qty;
-        counts[key].rev += (Number(item.price) || 0) * qty;
-      });
     });
-  });
 
-  const sorted = Object.entries(counts).sort((a, b) => b[1].qty - a[1].qty);
-
-  if (!sorted.length) {
-    listEl.innerHTML = '<div class="empty">No sales data yet</div>';
-    return;
+  }catch(e){
+    document.getElementById('setupMsg').className='msg error';
+    document.getElementById('setupMsg').textContent='Failed to connect: '+e.message;
+    localStorage.removeItem('dash_fb_config');
+    show('setupScreen');
   }
-
-  listEl.innerHTML = sorted.slice(0, 10).map(([name, d], i) => `
-    <div class="item-row">
-      <div>
-        <div class="item-name">${i + 1}. ${_esc(name)}</div>
-        <div class="item-count">${d.qty} sold</div>
-      </div>
-      <div class="item-rev">${_fmt(d.rev)}</div>
-    </div>
-  `).join('');
 }
 
-// ── Render: Staff ──────────────────────────────────────────────────────────
-function renderStaff(sessions) {
-  const listEl = document.getElementById('staffList');
-  const statEl = document.getElementById('statStaff');
+function setupListeners(){
+  _fbDb.ref('settings').on('value', snap=>{
+    if(snap.val()){ _data.settings=snap.val(); document.getElementById('dashBarName').textContent=_data.settings.barName||'The Local'; }
+    renderAll();
+  });
+  _fbDb.ref('tabs').on('value', snap=>{
+    const d=snap.val();
+    _data.tabs = d ? Object.values(d) : [];
+    renderAll();
+  });
+  _fbDb.ref('transactions').on('value', snap=>{
+    const d=snap.val();
+    _data.transactions = d ? Object.values(d) : [];
+    renderAll();
+  });
+  _fbDb.ref('employees').on('value', snap=>{
+    const d=snap.val();
+    _data.employees = d ? Object.values(d) : [];
+    renderAll();
+  });
+  _fbDb.ref('shiftNotes').on('value', snap=>{
+    const d=snap.val();
+    _data.shiftNotes = d ? (Array.isArray(d) ? d : Object.values(d)) : [];
+    renderShiftNotes();
+  });
+}
 
-  const active = sessions.filter(s => s && s.active);
-  statEl.textContent = active.length;
+// ═══════════════════════════════════════════════════
+//  PIN PAD
+// ═══════════════════════════════════════════════════
+function pp(k){
+  const err=document.getElementById('pinError');
+  err.textContent='';
+  if(k==='clr'){_pinBuf='';renderPinDots();return;}
+  if(k==='del'){_pinBuf=_pinBuf.slice(0,-1);renderPinDots();return;}
+  if(_pinBuf.length>=4)return;
+  _pinBuf+=k;
+  renderPinDots();
+  if(_pinBuf.length===4) setTimeout(checkPin,120);
+}
 
-  if (!active.length) {
-    listEl.innerHTML = '<div class="empty">No staff logged in</div>';
-    return;
+function renderPinDots(){
+  for(let i=0;i<4;i++){
+    const d=document.getElementById('pd'+i);
+    if(d)d.className='pin-dot'+(i<_pinBuf.length?' filled':'');
   }
+}
 
-  const roleColors = { owner: '#f0a500', manager: '#3b82f6', worker: '#22c55e', dev: '#a855f7' };
+function checkPin(){
+  const dp = _data.settings.dashboardPin || '0000';
+  // Also accept any manager/owner employee PIN
+  const empPins = (_data.employees||[])
+    .filter(e=>e.role==='owner'||e.role==='manager')
+    .map(e=>e.pin);
+  const valid = _pinBuf===String(dp) || empPins.includes(_pinBuf);
+  if(valid){
+    _authed=true;
+    sessionStorage.setItem('dash_authed','1');
+    setupListeners();
+    show('dashScreen');
+    startClock();
+  } else {
+    document.getElementById('pinError').textContent='Incorrect PIN — try again';
+    _pinBuf='';
+    renderPinDots();
+    // Shake animation
+    const box = document.querySelector('.pin-box');
+    box.style.animation='';
+    void box.offsetWidth;
+    box.style.animation='shake .4s ease';
+  }
+}
 
-  listEl.innerHTML = active.map(s => {
-    const color = roleColors[s.role] || '#9090a8';
-    const initials = (s.name || '?').split(' ').map(w => w[0]).join('').toUpperCase().slice(0, 2);
-    return `
-      <div class="staff-item">
-        <div class="staff-avatar" style="background:${color}22;color:${color};">${_esc(initials)}</div>
-        <div>
-          <div class="staff-name">${_esc(s.name || 'Unknown')}</div>
-          <div class="staff-role">${_esc(s.role || '')}</div>
-        </div>
-        <div class="staff-since">${_timeAgo(s.loginTime)}</div>
+// Add shake keyframe
+const _ks=document.createElement('style');
+_ks.textContent='@keyframes shake{0%,100%{transform:translateX(0);}25%{transform:translateX(-8px);}75%{transform:translateX(8px);}}';
+document.head.appendChild(_ks);
+
+function dashLogout(){
+  _authed=false;
+  sessionStorage.removeItem('dash_authed');
+  _pinBuf='';
+  renderPinDots();
+  document.getElementById('pinError').textContent='';
+  if(_refreshTimer)clearInterval(_refreshTimer);
+  show('pinScreen');
+}
+
+// ═══════════════════════════════════════════════════
+//  CLOCK
+// ═══════════════════════════════════════════════════
+function startClock(){
+  updateClock();
+  if(_refreshTimer)clearInterval(_refreshTimer);
+  _refreshTimer=setInterval(updateClock,30000);
+}
+function updateClock(){
+  const now=new Date();
+  const days=['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+  const months=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  document.getElementById('dashDate').textContent=
+    `${days[now.getDay()]}, ${months[now.getMonth()]} ${now.getDate()} · ${now.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})}`;
+  document.getElementById('lastUpdated').textContent=
+    'Updated '+now.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit',second:'2-digit'});
+}
+
+// ═══════════════════════════════════════════════════
+//  DATA HELPERS
+// ═══════════════════════════════════════════════════
+function todayStr(){return new Date().toDateString();}
+
+function todayTx(){
+  return (_data.transactions||[]).filter(t=>
+    !t.voided &&
+    new Date(t.timestamp).toDateString()===todayStr()
+  );
+}
+
+function openTabs(){
+  return (_data.tabs||[]).filter(t=>t.status==='open');
+}
+
+function empName(id){
+  const e=(_data.employees||[]).find(e=>e.id===id);
+  return e?(e.emoji+' '+e.name):'Unknown';
+}
+
+// ═══════════════════════════════════════════════════
+//  RENDER ALL
+// ═══════════════════════════════════════════════════
+function renderAll(){
+  renderStats();
+  renderGoal();
+  renderWalkoutAlert();
+  renderHappyHour();
+  renderBarKitchenSplit();
+  renderPaymentSplit();
+  renderHourly();
+  renderTrend7Day();
+  renderLeaderboard();
+  renderTabs();
+  renderTips();
+  renderTopItems();
+  renderRecentTx();
+  renderShiftNotes();
+}
+
+// ── STATS ──
+function renderStats(){
+  const txs = todayTx();
+  const revenue = txs.reduce((s,t)=>s+(t.subtotal||0),0);
+  const tips    = txs.reduce((s,t)=>s+(t.tip||0),0);
+  const tipPct  = revenue>0?Math.round(tips/revenue*100):0;
+  const avg     = txs.length>0?revenue/txs.length:0;
+  const ot      = openTabs();
+  const tabVal  = ot.reduce((s,t)=>s+((t.items||[]).reduce((ss,i)=>ss+(i.price*i.qty),0)),0);
+  const last    = txs.length>0?txs[txs.length-1]:null;
+
+  _s('statRevenue','$'+revenue.toFixed(revenue<1000?2:0));
+  _s('statTxCount',txs.length+' transaction'+(txs.length!==1?'s':''));
+  _s('statTabs',String(ot.length));
+  _s('statTabValue','$'+tabVal.toFixed(2)+' on tables');
+  _s('statTips','$'+tips.toFixed(tips<1000?2:0));
+  _s('statAvgTip','avg '+tipPct+'%');
+  _s('statAvgTicket','$'+avg.toFixed(2));
+  if(last){
+    const t=new Date(last.timestamp);
+    _s('statLastSale','Last: '+t.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'}));
+  } else {
+    _s('statLastSale','No sales yet');
+  }
+}
+
+// ── GOAL ──
+function renderGoal(){
+  const goal = _data.settings.dailyGoal||0;
+  const sec  = document.getElementById('goalSection');
+  if(!goal||goal<=0){sec.style.display='none';return;}
+  sec.style.display='';
+  const txs = todayTx();
+  const rev  = txs.reduce((s,t)=>s+(t.subtotal||0),0);
+  const pct  = Math.min(Math.round(rev/goal*100),100);
+  const fill = document.getElementById('goalFill');
+  fill.style.width=pct+'%';
+  fill.style.background=pct>=100?'var(--green)':pct>=75?'var(--accent)':'var(--blue)';
+  _s('goalPct',pct+'%');
+  _s('goalCurrent','$'+rev.toFixed(0));
+  _s('goalTarget','Goal: $'+goal.toLocaleString());
+}
+
+// ── HOURLY ──
+function renderHourly(){
+  const txs  = todayTx();
+  const now  = new Date();
+  const curH = now.getHours();
+  // Show last 8 hours (or from first hour of data, whichever is wider)
+  let startH = Math.max(0, curH-7);
+  if(txs.length>0){
+    const minH=Math.min(...txs.map(t=>new Date(t.timestamp).getHours()));
+    startH=Math.min(startH,minH);
+  }
+  const hours=[];
+  for(let h=startH;h<=curH;h++) hours.push(h);
+
+  const buckets={};
+  hours.forEach(h=>buckets[h]=0);
+  txs.forEach(t=>{
+    const h=new Date(t.timestamp).getHours();
+    if(buckets[h]!==undefined) buckets[h]+=(t.subtotal||0);
+  });
+
+  const maxVal=Math.max(...Object.values(buckets),1);
+  const total=Object.values(buckets).reduce((s,v)=>s+v,0);
+  _s('hourlySub','$'+total.toFixed(0)+' total');
+
+  const chart=document.getElementById('hourlyChart');
+  chart.innerHTML=hours.map(h=>{
+    const v=buckets[h]||0;
+    const pct=Math.round(v/maxVal*100);
+    const lbl=h===0?'12a':h<12?h+'a':h===12?'12p':(h-12)+'p';
+    const isCur=h===curH;
+    return `<div class="hour-bar-wrap">
+      <div class="hour-bar-col">
+        <div class="hour-bar" style="height:${Math.max(pct,v>0?4:1)}%;${isCur?'background:linear-gradient(180deg,var(--green),#16a34a);':''}"></div>
       </div>
-    `;
+      <div class="hour-label" style="${isCur?'color:var(--green);font-weight:700;':''}">${lbl}</div>
+    </div>`;
   }).join('');
 }
 
-// ── XSS guard ──────────────────────────────────────────────────────────────
-function _esc(str) {
-  return String(str || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+// ── OPEN TABS ──
+function renderTabs(){
+  const ot=openTabs();
+  _s('tabsBadge',String(ot.length));
+
+  const now=Date.now();
+  const list=document.getElementById('tabList');
+  if(!ot.length){list.innerHTML='<div class="empty-state">🎉 No open tabs right now</div>';return;}
+
+  // Sort by most $ first
+  const sorted=[...ot].sort((a,b)=>{
+    const va=(a.items||[]).reduce((s,i)=>s+(i.price*i.qty),0);
+    const vb=(b.items||[]).reduce((s,i)=>s+(i.price*i.qty),0);
+    return vb-va;
+  });
+
+  list.innerHTML=sorted.map(tab=>{
+    const total=(tab.items||[]).reduce((s,i)=>s+(i.price*i.qty),0);
+    const itemCount=(tab.items||[]).reduce((s,i)=>s+i.qty,0);
+    // Parse tab open time
+    let ageStr='', ageCls='';
+    if(tab.openedAt){
+      const mins=Math.round((now-tab.openedAt)/60000);
+      ageStr=mins<60?mins+'m':Math.floor(mins/60)+'h '+('0'+mins%60).slice(-2)+'m';
+      if(mins>120)ageCls='alert'; else if(mins>60)ageCls='warn';
+    } else if(tab.time){
+      ageStr=tab.time;
+    }
+    const emp=tab.employeeId?(_data.employees||[]).find(e=>e.id===tab.employeeId):null;
+    const empStr=emp?(emp.emoji+' '+emp.name):'';
+    return `<div class="tab-row">
+      <div class="tab-row-left">
+        <div class="tab-name">${escH(tab.name)}</div>
+        <div class="tab-meta">${itemCount} item${itemCount!==1?'s':''}${empStr?' · '+empStr:''}</div>
+      </div>
+      <div style="text-align:right;">
+        <div class="tab-total">$${total.toFixed(2)}</div>
+        ${ageStr?`<div class="tab-age ${ageCls}">${ageStr}</div>`:''}
+      </div>
+    </div>`;
+  }).join('');
 }
 
-// ── Responsive: collapse two-col on mobile ─────────────────────────────────
-(function() {
-  const twoCol = document.getElementById('twoCol');
-  function checkWidth() {
-    if (twoCol) twoCol.style.gridTemplateColumns = window.innerWidth < 640 ? '1fr' : '1fr 1fr';
-  }
-  window.addEventListener('resize', checkWidth);
-  checkWidth();
-})();
+// ── TIPS ──
+function renderTips(){
+  const txs=todayTx();
+  const byEmp={};
+  txs.forEach(t=>{
+    if((t.tip||0)<=0)return;
+    const id=t.employeeId||'unknown';
+    byEmp[id]=(byEmp[id]||0)+t.tip;
+  });
 
-// ── Auto-restore session config ────────────────────────────────────────────
-(function() {
-  const saved = _safe(() => sessionStorage.getItem('mgr_fb_cfg'), null);
-  if (saved) {
-    document.getElementById('fbConfigInput').value = saved;
+  const entries=Object.entries(byEmp).sort((a,b)=>b[1]-a[1]);
+  const total=entries.reduce((s,[,v])=>s+v,0);
+  _s('tipsTotal','$'+total.toFixed(2)+' total');
+
+  const list=document.getElementById('tipList');
+  if(!entries.length){
+    list.innerHTML='<div style="color:var(--text2);font-size:.78rem;text-align:center;padding:8px 0;">No tips yet today</div>';
+    return;
   }
-})();
+  const max=entries[0][1];
+  list.innerHTML=entries.map(([id,amt])=>{
+    const emp=(_data.employees||[]).find(e=>String(e.id)===String(id));
+    const name=emp?(emp.name):'Unknown';
+    const pct=Math.round(amt/max*100);
+    return `<div class="tip-row">
+      <div class="tip-emp" title="${escH(name)}">${emp?emp.emoji+' ':''}<span>${escH(name)}</span></div>
+      <div class="tip-bar-wrap"><div class="tip-bar-fill" style="width:${pct}%"></div></div>
+      <div class="tip-amt">$${amt.toFixed(2)}</div>
+    </div>`;
+  }).join('');
+}
+
+// ── TOP ITEMS ──
+function renderTopItems(){
+  const txs=todayTx();
+  const counts={}, revenue={};
+  txs.forEach(t=>(t.items||[]).forEach(it=>{
+    const key=it.name||'?';
+    counts[key]=(counts[key]||0)+it.qty;
+    revenue[key]=(revenue[key]||0)+(it.price*it.qty);
+  }));
+  const sorted=Object.entries(counts).sort((a,b)=>b[1]-a[1]).slice(0,8);
+  const list=document.getElementById('topItemsList');
+  if(!sorted.length){list.innerHTML='<div class="empty-state">No items sold yet</div>';return;}
+  list.innerHTML=sorted.map(([name,qty],i)=>{
+    // Find emoji from name
+    const allItems=txs.flatMap(t=>t.items||[]);
+    const found=allItems.find(it=>it.name===name);
+    const emoji=found?(found.emoji||'🍹'):'🍹';
+    return `<div class="item-row">
+      <div class="item-rank">${i+1}</div>
+      <div style="font-size:1.1rem;">${emoji}</div>
+      <div class="item-name">${escH(name)}</div>
+      <div class="item-count">${qty}x</div>
+      <div class="item-rev">$${(revenue[name]||0).toFixed(2)}</div>
+    </div>`;
+  }).join('');
+}
+
+// ── RECENT TRANSACTIONS ──
+function renderRecentTx(){
+  const txs=todayTx();
+  const recent=[...txs].reverse().slice(0,10);
+  const list=document.getElementById('recentTxList');
+  if(!recent.length){list.innerHTML='<div class="empty-state">No transactions today</div>';return;}
+  list.innerHTML=recent.map(tx=>{
+    const t=new Date(tx.timestamp);
+    const time=t.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'});
+    const itemCount=(tx.items||[]).reduce((s,i)=>s+i.qty,0);
+    const emp=(_data.employees||[]).find(e=>e.id===tx.employeeId);
+    const empStr=emp?(emp.emoji+' '+emp.name):'';
+    return `<div class="tx-row${tx.voided?' tx-voided':''}">
+      <div class="tx-left">
+        <div class="tx-tab">${escH(tx.tabName||'Quick Sale')}</div>
+        <div class="tx-meta">${itemCount} item${itemCount!==1?'s':''}${empStr?' · '+empStr:''}${tx.tip>0?' · tip $'+tx.tip.toFixed(2):''}</div>
+      </div>
+      <div class="tx-right">
+        <div class="tx-total">$${(tx.total||0).toFixed(2)}</div>
+        <div class="tx-time">${time}</div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+// ── SALES PACE & COMPS/VOIDS (added to existing renderStats) ──
+function renderStats(){
+  const txs = todayTx();
+  const allTxs = (_data.transactions||[]).filter(t=>new Date(t.timestamp).toDateString()===todayStr());
+  const revenue = txs.reduce((s,t)=>s+(t.subtotal||0),0);
+  const tips    = txs.reduce((s,t)=>s+(t.tip||0),0);
+  const tipPct  = revenue>0?Math.round(tips/revenue*100):0;
+  const avg     = txs.length>0?revenue/txs.length:0;
+  const ot      = openTabs();
+  const tabVal  = ot.reduce((s,t)=>s+((t.items||[]).reduce((ss,i)=>ss+(i.price*(i.modTotal||0 ? i.price : 1)*i.qty),0)),0);
+  const last    = txs.length>0?txs[txs.length-1]:null;
+
+  _s('statRevenue','$'+revenue.toFixed(revenue<1000?2:0));
+  _s('statTxCount',txs.length+' transaction'+(txs.length!==1?'s':''));
+  _s('statTabs',String(ot.length));
+  _s('statTabValue','$'+ot.reduce((s,t)=>s+((t.items||[]).reduce((ss,i)=>ss+(i.price*i.qty),0)),0).toFixed(2)+' on tables');
+  _s('statTips','$'+tips.toFixed(tips<1000?2:0));
+  _s('statAvgTip','avg '+tipPct+'%');
+  _s('statAvgTicket','$'+avg.toFixed(2));
+  if(last){
+    const t=new Date(last.timestamp);
+    _s('statLastSale','Last: '+t.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'}));
+  } else {
+    _s('statLastSale','No sales yet');
+  }
+
+  // ── SALES PACE ──
+  const now = new Date();
+  const curH = now.getHours() + now.getMinutes()/60;
+  const minsUntilMidnight = (24 - curH) * 60;
+  // Use last 2 hours of revenue as pace indicator
+  const twoHrsAgo = Date.now() - 2*60*60*1000;
+  const recentRev = txs.filter(t=>new Date(t.timestamp).getTime()>twoHrsAgo).reduce((s,t)=>s+(t.subtotal||0),0);
+  const recentHrs = Math.min(curH, 2);
+  const hourlyRate = recentHrs>0 ? recentRev/recentHrs : 0;
+  const projected = revenue + hourlyRate*(minsUntilMidnight/60);
+  if(txs.length===0){
+    _s('statPace','—'); _s('statPaceSub','no sales yet');
+  } else {
+    _s('statPace','$'+Math.round(projected).toLocaleString());
+    _s('statPaceSub','$'+Math.round(hourlyRate)+'/hr pace');
+  }
+
+  // ── COMPS & VOIDS ──
+  const compAmt  = allTxs.filter(t=>t.compTotal>0).reduce((s,t)=>s+(t.compTotal||0),0);
+  const voidAmt  = allTxs.filter(t=>t.voided).reduce((s,t)=>s+(t.total||0),0);
+  const compCount= allTxs.filter(t=>t.compTotal>0).length;
+  const voidCount= allTxs.filter(t=>t.voided).length;
+  const cvTotal  = compAmt+voidAmt;
+  _s('statCompVoid','$'+cvTotal.toFixed(2));
+  _s('statCompVoidSub',compCount+' comp'+(compCount!==1?'s':'') +' · '+ voidCount+' void'+(voidCount!==1?'s':''));
+}
+
+// ── WALKOUT RISK ALERT ──
+function renderWalkoutAlert(){
+  const el = document.getElementById('walkoutAlert');
+  if(!el) return;
+  const now = Date.now();
+  const risky = openTabs().filter(tab=>{
+    if(!tab.openedAt) return false;
+    const mins = (now - tab.openedAt)/60000;
+    const val = (tab.items||[]).reduce((s,i)=>s+(i.price*i.qty),0);
+    return mins >= 150 && val >= 50; // 2.5hrs+ and $50+
+  }).sort((a,b)=>{
+    const va=(a.items||[]).reduce((s,i)=>s+(i.price*i.qty),0);
+    const vb=(b.items||[]).reduce((s,i)=>s+(i.price*i.qty),0);
+    return vb-va;
+  });
+  if(!risky.length){ el.className='hidden'; return; }
+  el.className='walkout-alert';
+  el.innerHTML=`<div class="walkout-alert-hd">⚠️ Walkout Risk — ${risky.length} tab${risky.length!==1?'s':''} open 2.5h+ with $50+</div>`+
+    risky.map(tab=>{
+      const val=(tab.items||[]).reduce((s,i)=>s+(i.price*i.qty),0);
+      const mins=Math.round((now-tab.openedAt)/60000);
+      const age=mins<60?mins+'m':Math.floor(mins/60)+'h '+(mins%60)+'m';
+      const emp=tab.employeeId?(_data.employees||[]).find(e=>e.id===tab.employeeId):null;
+      return `<div class="walkout-row">
+        <span class="walkout-name">${escH(tab.name)}</span>
+        <span class="walkout-detail">${age}${emp?' · '+emp.name:''}</span>
+        <span class="walkout-amt">$${val.toFixed(2)}</span>
+      </div>`;
+    }).join('');
+}
+
+// ── HAPPY HOUR STATUS ──
+function renderHappyHour(){
+  const el = document.getElementById('happyHourCard');
+  if(!el) return;
+  const hhs = (_data.settings.happyHours||[]).filter(h=>h.enabled);
+  if(!hhs.length){ el.innerHTML='<div class="hh-card inactive"><div><div class="hh-name" style="color:var(--text2);">No happy hours configured</div></div></div>'; return; }
+  const now = new Date();
+  const day = now.getDay(); // 0=Sun
+  const curMins = now.getHours()*60 + now.getMinutes();
+  const toMins = s=>{ const [h,m]=s.split(':').map(Number); return h*60+m; };
+  // Find active HH
+  let activeHH = hhs.find(h=>(h.days||[]).includes(day) && curMins>=toMins(h.startTime) && curMins<toMins(h.endTime));
+  if(activeHH){
+    const endM = toMins(activeHH.endTime);
+    const rem  = endM - curMins;
+    const remStr = rem>=60 ? Math.floor(rem/60)+'h '+(rem%60)+'m' : rem+'m';
+    el.innerHTML=`<div class="hh-card active">
+      <div>
+        <div class="hh-name" style="color:var(--accent);">${escH(activeHH.name)}</div>
+        <div class="hh-sub">${activeHH.discountPct}% off · ends at ${activeHH.endTime}</div>
+        <div class="hh-countdown">⏱ ${remStr} remaining</div>
+      </div>
+      <div class="hh-badge on">● LIVE</div>
+    </div>`;
+    return;
+  }
+  // Find next upcoming HH today or this week
+  const upcoming = hhs.map(h=>{
+    let daysAhead=0, found=false;
+    for(let d=0;d<7;d++){
+      const checkDay=(day+d)%7;
+      if((h.days||[]).includes(checkDay)){
+        const startM=toMins(h.startTime);
+        if(d===0 && startM<=curMins) continue;
+        daysAhead=d; found=true; break;
+      }
+    }
+    if(!found) return null;
+    return {...h, daysAhead};
+  }).filter(Boolean).sort((a,b)=>a.daysAhead-b.daysAhead||toMins(a.startTime)-toMins(b.startTime));
+  const next = upcoming[0];
+  const dayNames=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+  const nextStr = next ? (next.daysAhead===0?`today at ${next.startTime}`:`${dayNames[(day+next.daysAhead)%7]} at ${next.startTime}`) : 'none scheduled';
+  el.innerHTML=`<div class="hh-card inactive">
+    <div>
+      <div class="hh-name">${next?escH(next.name):'No upcoming happy hour'}</div>
+      <div class="hh-sub">${next?next.discountPct+'% off · starts '+nextStr:'Check settings to add one'}</div>
+    </div>
+    <div class="hh-badge off">○ OFF</div>
+  </div>`;
+}
+
+// ── BAR vs KITCHEN SPLIT ──
+function renderBarKitchenSplit(){
+  const DRINK_CATS=['beer','wine','whiskey','tequila','rum','vodka','gin','cognac','liqueur','herbal','cocktail','shots','na','drinks'];
+  const FOOD_CATS=['food','kitchen','appetizer','entree','dessert','snack'];
+  const txs = todayTx();
+  let barRev=0, kitRev=0;
+  txs.forEach(t=>(t.items||[]).forEach(i=>{
+    if(i.comped) return;
+    const cat=(i.cat||'').toLowerCase();
+    const rev=i.price*i.qty;
+    if(FOOD_CATS.some(c=>cat.includes(c))) kitRev+=rev;
+    else barRev+=rev;
+  }));
+  const total=barRev+kitRev;
+  _s('splitTotal','$'+total.toFixed(0)+' total');
+  _s('splitBarVal','$'+barRev.toFixed(0));
+  _s('splitKitVal','$'+kitRev.toFixed(0));
+  _s('splitBarPct',total>0?Math.round(barRev/total*100)+'%':'—');
+  _s('splitKitPct',total>0?Math.round(kitRev/total*100)+'%':'—');
+  const barPct=total>0?Math.round(barRev/total*100):50;
+  const kitPct=100-barPct;
+  const bf=document.getElementById('splitBarFill'), kf=document.getElementById('splitKitFill');
+  if(bf) bf.style.width=barPct+'%';
+  if(kf) kf.style.width=kitPct+'%';
+}
+
+// ── PAYMENT METHOD SPLIT ──
+function renderPaymentSplit(){
+  const txs = todayTx();
+  const map={};
+  txs.forEach(t=>{
+    const m=t.method||'Unknown';
+    if(!map[m])map[m]={total:0,count:0};
+    map[m].total+=(t.total||0);
+    map[m].count++;
+  });
+  const entries=Object.entries(map).sort((a,b)=>b[1].total-a[1].total);
+  const grandTotal=entries.reduce((s,[,v])=>s+v.total,0);
+  const list=document.getElementById('payMethodList');
+  _s('payMethodTotal','$'+grandTotal.toFixed(0)+' total');
+  if(!entries.length){
+    list.innerHTML='<div style="color:var(--text2);font-size:.78rem;text-align:center;padding:8px 0;">No transactions yet</div>';
+    return;
+  }
+  const colors={'Cash':'var(--green)','Card':'var(--blue)','Tap to Pay':'var(--purple)'};
+  const icons={'Cash':'💵','Card':'💳','Tap to Pay':'📱'};
+  list.innerHTML=entries.map(([method,d])=>{
+    const pct=grandTotal>0?Math.round(d.total/grandTotal*100):0;
+    const color=colors[method]||'var(--accent)';
+    const icon=icons[method]||'💰';
+    return `<div class="pay-split-row">
+      <div class="pay-split-label">${icon} ${escH(method)}</div>
+      <div class="pay-split-bar-wrap"><div class="pay-split-fill" style="width:${pct}%;background:${color};"></div></div>
+      <div class="pay-split-amt">$${d.total.toFixed(0)}</div>
+      <div class="pay-split-pct">${pct}%</div>
+    </div>`;
+  }).join('');
+}
+
+// ── 7-DAY TREND ──
+function renderTrend7Day(){
+  const txs = _data.transactions||[];
+  const today = new Date(); today.setHours(0,0,0,0);
+  const days=[];
+  for(let i=6;i>=0;i--){
+    const d=new Date(today); d.setDate(d.getDate()-i);
+    days.push(d);
+  }
+  const buckets=days.map(d=>{
+    const ds=d.toDateString();
+    const rev=txs.filter(t=>!t.voided&&new Date(t.timestamp).toDateString()===ds).reduce((s,t)=>s+(t.subtotal||0),0);
+    return{date:d,rev};
+  });
+  const maxVal=Math.max(...buckets.map(b=>b.rev),1);
+  const dayNames=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+  const todayStr2=today.toDateString();
+  _s('trendSub','vs last 7 days');
+  const chart=document.getElementById('trendChart');
+  chart.innerHTML=buckets.map(b=>{
+    const pct=Math.round(b.rev/maxVal*100);
+    const isToday=b.date.toDateString()===todayStr2;
+    const lbl=isToday?'Today':dayNames[b.date.getDay()];
+    return `<div class="trend-bar-wrap">
+      <div class="trend-bar-col">
+        <div class="trend-bar ${isToday?'today-bar':'past-bar'}" style="height:${Math.max(pct,b.rev>0?4:1)}%;"></div>
+      </div>
+      <div class="trend-label ${isToday?'today-lbl':''}">${lbl}</div>
+    </div>`;
+  }).join('');
+}
+
+// ── STAFF LEADERBOARD ──
+function renderLeaderboard(){
+  const txs = todayTx();
+  const byEmp={};
+  txs.forEach(t=>{
+    const id=t.employeeId||'unknown';
+    if(!byEmp[id])byEmp[id]={rev:0,txCount:0,tips:0};
+    byEmp[id].rev+=(t.subtotal||0);
+    byEmp[id].txCount++;
+    byEmp[id].tips+=(t.tip||0);
+  });
+  const entries=Object.entries(byEmp).sort((a,b)=>b[1].rev-a[1].rev);
+  const list=document.getElementById('leaderList');
+  if(!entries.length){list.innerHTML='<div class="empty-state">No sales yet</div>';return;}
+  const rankColors=['gold','silver','bronze'];
+  list.innerHTML=entries.map(([id,d],i)=>{
+    const emp=(_data.employees||[]).find(e=>String(e.id)===String(id));
+    const name=emp?(emp.emoji+' '+emp.name):'Unknown';
+    const rankCls=rankColors[i]||'';
+    const medals=['🥇','🥈','🥉'];
+    const rankIcon=medals[i]||('#'+(i+1));
+    return `<div class="leader-row">
+      <div class="leader-rank ${rankCls}">${rankIcon}</div>
+      <div class="leader-info">
+        <div class="leader-name">${escH(name)}</div>
+        <div class="leader-sub">${d.txCount} sale${d.txCount!==1?'s':''}${d.tips>0?' · $'+d.tips.toFixed(2)+' tips':''}</div>
+      </div>
+      <div class="leader-rev">$${d.rev.toFixed(2)}</div>
+    </div>`;
+  }).join('');
+}
+
+// ── SHIFT NOTES ──
+function renderShiftNotes(){
+  const list=document.getElementById('notesFeed');
+  if(!list) return;
+  const notes=(_data.shiftNotes||[]).filter(n=>n&&n.text);
+  // Sort newest first, show today's notes only
+  const todayNotes=notes.filter(n=>{
+    if(!n.timestamp) return true;
+    return new Date(n.timestamp).toDateString()===todayStr();
+  }).sort((a,b)=>new Date(b.timestamp||0)-new Date(a.timestamp||0)).slice(0,10);
+  if(!todayNotes.length){list.innerHTML='<div class="empty-state">No notes this shift</div>';return;}
+  list.innerHTML=todayNotes.map(n=>{
+    const emp=n.employeeId?(_data.employees||[]).find(e=>e.id===n.employeeId):null;
+    const who=emp?(emp.emoji+' '+emp.name):(n.author||'Unknown');
+    const when=n.timestamp?new Date(n.timestamp).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'}):'';
+    return `<div class="note-item">
+      <div class="note-text">${escH(n.text)}</div>
+      <div class="note-meta">${escH(who)}${when?' · '+when:''}</div>
+    </div>`;
+  }).join('');
+}
+
+// ═══════════════════════════════════════════════════
+//  UTILS
+// ═══════════════════════════════════════════════════
+function _s(id,txt){const el=document.getElementById(id);if(el)el.textContent=txt;}
+function escH(s){return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
 </script>
 </body>
 </html>
