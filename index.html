@@ -2217,7 +2217,10 @@ function loginAs(emp){
   currentUser.loginTime=new Date().toISOString();
   document.getElementById('pinScreen').classList.add('hidden');
   document.getElementById('loginScreen').classList.add('hidden');
-  document.getElementById('appScreen').classList.remove('hidden');
+  const appScreen=document.getElementById('appScreen');
+  appScreen.classList.remove('hidden');
+  appScreen.style.pointerEvents='none';
+  setTimeout(()=>{appScreen.style.pointerEvents='';},400);
   resetActivity();
   startInactivityWatcher();
   setupForUser();
