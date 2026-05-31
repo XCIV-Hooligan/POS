@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>Bar POS — Helcim</title>
 <script src="https://cdn.jsdelivr.net/npm/lz-string@1.5.0/libs/lz-string.min.js"></script>
+<script src="https://secure.helcim.app/helcim-pay/services/start.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
 <style>
@@ -268,16 +269,16 @@ header{background:var(--surface);border-bottom:1px solid var(--border);padding:8
 /* MODALS */
 .modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.7);display:flex;align-items:center;justify-content:center;z-index:200;padding:16px;}
 /* Numpad side panel */
-.tip-numpad-drawer{position:fixed;top:0;right:0;bottom:0;width:300px;z-index:300;background:var(--surface);border-left:2px solid var(--accent);padding:20px 16px 24px;box-shadow:-8px 0 40px rgba(0,0,0,.5);transform:translateX(100%);transition:transform .22s cubic-bezier(.4,0,.2,1);display:flex;flex-direction:column;overflow-y:auto;}
+.tip-numpad-drawer{position:fixed;top:0;right:0;bottom:0;width:50vw;z-index:300;background:var(--surface);border-left:2px solid var(--accent);padding:24px 20px 28px;box-shadow:-8px 0 40px rgba(0,0,0,.5);transform:translateX(100%);transition:transform .22s cubic-bezier(.4,0,.2,1);display:flex;flex-direction:column;overflow-y:auto;}
 .tip-numpad-drawer.open{transform:translateX(0);}
 .tip-numpad-drawer .drawer-handle{display:none;}
-.tip-numpad-drawer .drawer-title{display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;}
-.tip-numpad-drawer .drawer-title span{font-size:.9rem;font-weight:700;color:var(--accent);}
-.tip-numpad-drawer .ctd-value{font-size:2rem;font-weight:900;color:var(--text);text-align:right;}
-.tip-numpad-drawer .tip-numpad{gap:8px;flex:1;}
-.tip-numpad-drawer .tip-numpad-btn{padding:16px 4px;font-size:1.2rem;}
+.tip-numpad-drawer .drawer-title{display:flex;justify-content:space-between;align-items:center;margin-bottom:18px;}
+.tip-numpad-drawer .drawer-title span{font-size:1rem;font-weight:700;color:var(--accent);}
+.tip-numpad-drawer .ctd-value{font-size:2.6rem;font-weight:900;color:var(--text);text-align:right;}
+.tip-numpad-drawer .tip-numpad{gap:10px;flex:1;}
+.tip-numpad-drawer .tip-numpad-btn{padding:0;font-size:1.5rem;flex:1;min-height:72px;}
 /* Shift checkout modal left when panel is open */
-#checkoutModal.drawer-open{justify-content:flex-start;padding-left:16px;padding-right:316px;}
+#checkoutModal.drawer-open{justify-content:flex-start;padding-left:16px;padding-right:calc(50vw + 16px);}
 #checkoutModal.drawer-open .modal{max-width:100%;max-height:100vh;}
 .modal{background:var(--surface);border:1px solid var(--border);border-radius:14px;width:100%;max-width:440px;max-height:92vh;overflow-y:auto;box-shadow:0 20px 60px rgba(0,0,0,.5);}
 .modal-header{padding:16px 18px 12px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;}
@@ -555,9 +556,21 @@ input:checked+.toggle-track::after{left:23px;}
 .seat-btn.assigned{background:var(--accent);color:#000;border-color:var(--accent);}
 .seat-total-row{display:flex;justify-content:space-between;padding:5px 0;font-size:.82rem;}
 .seat-total-row.grand{font-weight:700;font-size:.92rem;color:var(--accent);border-top:1px solid var(--border);padding-top:8px;margin-top:4px;}
+
+/* ── In-page print overlay (iOS-safe, no popup needed) ─────────────────────── */
+#_printOverlay{display:none;position:fixed;inset:0;z-index:99999;background:#fff;overflow-y:auto;padding:0;}
+@media print{
+  body > *:not(#_printOverlay){display:none!important;}
+  #_printOverlay{display:block!important;position:static!important;padding:0!important;}
+  #_printOverlay ._print-close-btn{display:none!important;}
+}
 </style>
 </head>
 <body>
+<div id="_printOverlay">
+  <button class="_print-close-btn" onclick="_closePrintOverlay()" style="position:fixed;top:12px;right:12px;z-index:100000;background:#333;color:#fff;border:none;border-radius:8px;padding:8px 16px;font-size:.9rem;cursor:pointer;">✕ Close</button>
+  <div id="_printContent"></div>
+</div>
 
 <!-- ==================== LOGIN SCREEN ==================== -->
 <!-- EVENT MODE SCREEN -->
@@ -1051,7 +1064,7 @@ input:checked+.toggle-track::after{left:23px;}
           <div class="form-group"><label class="form-label">Phone (optional)</label><input class="form-input" id="settingBarPhone" placeholder="(555) 555-5555"></div>
         </div>
         <div class="form-row">
-          <div class="form-group"><label class="form-label">Tax Rate (%)</label><input class="form-input" id="settingTax" type="number" step="0.1"></div>
+          <div class="form-group"><label class="form-label">Tax Rate (%)</label><input class="form-input" id="settingTax" type="number" step="0.1" oninput="_taxRateLive(this.value)"></div>
           <div class="form-group"><label class="form-label">Tip Options (%, comma sep.)</label><input class="form-input" id="settingTips"></div>
         </div>
         <!-- Service Charge -->
@@ -1073,16 +1086,13 @@ input:checked+.toggle-track::after{left:23px;}
         </div>
         <!-- Receipt Printer -->
         <div style="background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:12px;margin-bottom:12px;">
-          <div style="display:flex;align-items:center;justify-content:space-between;">
+          <label style="display:flex;align-items:center;gap:12px;cursor:pointer;">
+            <input type="checkbox" id="settingAutoPrint" style="width:18px;height:18px;accent-color:var(--accent,#6c63ff);cursor:pointer;flex-shrink:0;">
             <div>
               <div style="font-size:.85rem;font-weight:700;">🖨 Auto-Print Receipt</div>
               <div style="font-size:.72rem;color:var(--text2);margin-top:2px;">Automatically open the print dialog after every payment. Works with any AirPrint-compatible receipt printer (e.g. Star TSP143IIIW, Epson TM-m30II).</div>
             </div>
-            <label style="position:relative;display:inline-block;width:44px;height:24px;flex-shrink:0;margin-left:12px;">
-              <input type="checkbox" id="settingAutoPrint" style="opacity:0;width:0;height:0;" onchange="document.getElementById('autoPrintSlider').style.background=this.checked?'var(--green)':'var(--border)'">
-              <span class="toggle-track" id="autoPrintSlider" style="background:var(--border);" onclick="document.getElementById('settingAutoPrint').click()"></span>
-            </label>
-          </div>
+          </label>
         </div>
         <!-- Happy Hour -->
         <div style="background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:12px;margin-bottom:10px;">
@@ -1172,12 +1182,56 @@ input:checked+.toggle-track::after{left:23px;}
         <div class="helcim-note" style="margin-bottom:12px;">
           This POS integrates with <strong>Helcim</strong> for tap-to-pay and card payments.<br><br>
           <strong>No monthly fee</strong> · Interchange+ pricing (~1.5–2.5% per transaction) · Hardware $99–$329<br><br>
-          Sign up at <strong>helcim.com</strong>, order a terminal, and paste your credentials below.
+          Sign up at <strong>helcim.com</strong>, order a terminal, and paste your credentials below.<br><br>
+          🔐 <strong>Security:</strong> Create a scoped API token in Helcim → <em>API Access → New Token</em> with only <strong>Payment: Write</strong> and <strong>Refund: Write</strong> permissions. Never use your full account token here.
         </div>
-        <div class="form-group"><label class="form-label">Helcim API Token</label><input class="form-input" id="settingHelcimToken" placeholder="Your Helcim API token"></div>
-        <div class="form-group"><label class="form-label">Terminal ID</label><input class="form-input" id="settingHelcimTerminal" placeholder="Terminal ID from Helcim dashboard"></div>
-        <div style="font-size:.72rem;color:var(--text2);margin-bottom:10px;">⚠️ Currently running in simulation mode — no real charges processed.</div>
-        <button class="btn btn-md btn-blue" onclick="saveHelcimSettings()">Save Helcim Settings</button>
+        <div class="form-row">
+          <div class="form-group"><label class="form-label">Helcim API Token</label><input class="form-input" id="settingHelcimToken" placeholder="Your scoped Helcim API token"></div>
+          <div class="form-group"><label class="form-label">Terminal ID</label><input class="form-input" id="settingHelcimTerminal" type="number" placeholder="Numeric terminal ID"></div>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label">Currency</label>
+            <select class="form-input" id="settingHelcimCurrency">
+              <option value="USD">USD — US Dollar</option>
+              <option value="CAD">CAD — Canadian Dollar</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label class="form-label">CORS Proxy URL <span style="font-weight:400;color:var(--text2)">(optional)</span></label>
+            <input class="form-input" id="settingHelcimProxy" placeholder="https://your-proxy.example.com">
+          </div>
+        </div>
+        <div class="helcim-note" style="margin-bottom:12px;font-size:.72rem;">
+          ⚠️ <strong>CORS Proxy:</strong> Browsers may block direct calls to api.helcim.com from a local file. If payments fail with a network/CORS error, deploy a simple proxy (free Cloudflare Worker or Vercel function) that forwards requests to <code>https://api.helcim.com</code> and enter its URL above. Leave blank to try direct connection first.
+        </div>
+        <div id="helcimStatusNote" style="font-size:.72rem;margin-bottom:10px;"></div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;">
+          <button class="btn btn-md btn-blue" onclick="saveHelcimSettings()" style="flex:1;min-width:140px;">Save Helcim Settings</button>
+          <button class="btn btn-md btn-ghost" onclick="testHelcimConnection()" style="flex:1;min-width:140px;">🔌 Test Connection</button>
+        </div>
+        <div id="helcimTestResult" style="font-size:.72rem;margin-top:8px;min-height:16px;"></div>
+      </div>
+
+      <!-- SMS / EMAIL RECEIPTS -->
+      <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:18px;margin-top:12px;">
+        <div class="section-label" style="margin-bottom:10px;">📨 SMS &amp; Email Receipts</div>
+        <div class="helcim-note" style="margin-bottom:12px;font-size:.72rem;">
+          Connect <strong>Twilio</strong> for SMS receipts and <strong>SendGrid</strong> for email receipts. Both offer free tiers for low volume.<br><br>
+          • Twilio: <strong>twilio.com</strong> → Account SID + Auth Token + a purchased phone number<br>
+          • SendGrid: <strong>sendgrid.com</strong> → Settings → API Keys → Full Access key<br><br>
+          ⚠️ These API calls also require a CORS proxy (same as Helcim above) or a small backend server.
+        </div>
+        <div class="form-row">
+          <div class="form-group"><label class="form-label">Twilio Account SID</label><input class="form-input" id="settingTwilioSid" placeholder="ACxxxxxxxxxxxxxxxx"></div>
+          <div class="form-group"><label class="form-label">Twilio Auth Token</label><input class="form-input" id="settingTwilioToken" type="password" placeholder="Auth token"></div>
+        </div>
+        <div class="form-group"><label class="form-label">Twilio From Number</label><input class="form-input" id="settingTwilioFrom" placeholder="+15551234567" type="tel"></div>
+        <div class="form-row">
+          <div class="form-group"><label class="form-label">SendGrid API Key</label><input class="form-input" id="settingSendgridKey" type="password" placeholder="SG.xxxxxxxx"></div>
+          <div class="form-group"><label class="form-label">From Email Address</label><input class="form-input" id="settingReceiptFromEmail" placeholder="receipts@yourbar.com" type="email"></div>
+        </div>
+        <button class="btn btn-md btn-blue" onclick="saveMessagingSettings()">Save Messaging Settings</button>
       </div>
 
       <!-- BACKUP / RESTORE -->
@@ -1628,18 +1682,17 @@ input:checked+.toggle-track::after{left:23px;}
 
 <!-- TEXT / EMAIL RECEIPT -->
 <div class="modal-overlay hidden" id="sendReceiptModal">
-  <div class="modal" style="max-width:360px;">
+  <div class="modal" style="max-width:380px;">
     <div class="modal-header"><div class="modal-title">📨 Send Receipt</div><button class="modal-close" onclick="closeModal('sendReceiptModal')">✕</button></div>
     <div class="modal-body">
-      <div style="font-size:.82rem;color:var(--text2);margin-bottom:12px;">Send a copy of this receipt to the customer via SMS or email.</div>
+      <div id="sendReceiptServiceNote" style="font-size:.72rem;color:var(--text2);margin-bottom:10px;"></div>
       <div class="form-group"><label class="form-label">Phone (SMS)</label><input class="form-input" id="sendReceiptPhone" placeholder="(555) 555-5555" type="tel"></div>
       <div class="form-group"><label class="form-label">Email</label><input class="form-input" id="sendReceiptEmail" placeholder="customer@email.com" type="email"></div>
       <div id="sendReceiptMsg" style="font-size:.78rem;min-height:16px;margin-top:4px;"></div>
-      <div style="font-size:.7rem;color:var(--text2);margin-top:8px;">⚠️ Simulation mode — no messages are actually sent. Connect a service like Twilio or SendGrid to enable real delivery.</div>
     </div>
     <div class="modal-footer">
       <button class="btn btn-md btn-ghost" style="flex:1" onclick="closeModal('sendReceiptModal')">Cancel</button>
-      <button class="btn btn-md btn-blue" style="flex:1" onclick="simulateSendReceipt()">📤 Send</button>
+      <button class="btn btn-md btn-blue" style="flex:1" onclick="sendReceipt()">📤 Send</button>
     </div>
   </div>
 </div>
@@ -1685,7 +1738,7 @@ input:checked+.toggle-track::after{left:23px;}
           <option value="Tab Credit">Tab Credit</option>
         </select>
       </div>
-      <div style="font-size:.72rem;color:var(--text2);">⚠️ Refunds are recorded and subtract from your totals. In simulation mode no actual payment is reversed — process the return through your terminal separately.</div>
+      <div id="refundHelcimNote" style="font-size:.72rem;color:var(--text2);"></div>
     </div>
     <div class="modal-footer">
       <button class="btn btn-md btn-ghost" style="flex:1" onclick="closeModal('refundModal')">Cancel</button>
@@ -1796,7 +1849,7 @@ function _safeSettingsSave(){
   _lsSave('pos2_settings', settings);
 }
 
-let settings = Object.assign({barName:'The Local',taxRate:8,tips:[15,18,20,25],helcimToken:'',helcimTerminal:'',autoPrint:false,gratuityPct:0,gratuityMin:50,logoutTimeout:5,chime:'ascending',theme:'dark',dailyGoal:0,weeklyGoal:0,discountPresets:[{name:'Employee',pct:50,flat:0},{name:'Industry',pct:25,flat:0},{name:'Military',pct:15,flat:0}],receiptFooter:'Thank you! Drink responsibly 🍺',showReceiptQR:true,happyHours:[{id:1,name:'Happy Hour',startTime:'16:00',endTime:'19:00',days:[1,2,3,4,5],discountPct:20,enabled:true}],dashboardPin:'0000',foodSpecialsEnabled:true,modifierPriceDefaults:{}},
+let settings = Object.assign({barName:'The Local',taxRate:8,tips:[15,18,20,25],helcimToken:'',helcimTerminal:'',helcimCurrency:'USD',helcimProxy:'',twilioSid:'',twilioToken:'',twilioFrom:'',sendgridKey:'',receiptFromEmail:'',autoPrint:false,gratuityPct:0,gratuityMin:50,logoutTimeout:5,chime:'ascending',theme:'dark',dailyGoal:0,weeklyGoal:0,discountPresets:[{name:'Employee',pct:50,flat:0},{name:'Industry',pct:25,flat:0},{name:'Military',pct:15,flat:0}],receiptFooter:'Thank you! Drink responsibly 🍺',showReceiptQR:true,happyHours:[{id:1,name:'Happy Hour',startTime:'16:00',endTime:'19:00',days:[1,2,3,4,5],discountPct:20,enabled:true}],dashboardPin:'0000',foodSpecialsEnabled:true,modifierPriceDefaults:{}},
   _safeParse('pos2_settings',{}));
 
 let employees = _safeParse('pos2_employees', null) || [
@@ -2076,6 +2129,7 @@ let lastCashTendered = 0;
 let lastChangeDue = 0;
 let lastTxId = null;
 let lastTxTimestamp = null;
+let lastHelcimTxId = null;  // Helcim transaction ID for the most recent payment
 
 // Modifier state
 let _modItem = null;
@@ -2859,8 +2913,8 @@ function compItem(lineIdx){
 
 function confirmClearOrder(){
   if(currentOrder.length===0)return;
-  if(!confirm('Clear all '+currentOrder.length+' item'+(currentOrder.length>1?'s':'')+' from this order?'))return;
-  clearOrder();
+  _showConfirm('Clear all '+currentOrder.length+' item'+(currentOrder.length>1?'s':'')+' from this order?',
+    ()=>clearOrder(), null, {danger:true, okLabel:'Clear'});
 }
 function clearOrder(){currentOrder=[];_discountPct=0;_discountFlat=0;_discountReason='';_noTabSession=false;renderOrder();_orderCheckpointClear();}
 
@@ -2889,7 +2943,7 @@ function _orderCheckpointRestore(){
     const age=Date.now()-new Date(cp.savedAt).getTime();
     if(age>8*60*60*1000){_orderCheckpointClear();return;} // ignore if >8hrs old
     const mins=Math.round(age/60000);
-    if(confirm('Unsaved order found from '+mins+' min ago'+(cp.user?' ('+cp.user+')':'')+'. Restore it?')){
+    _showConfirm('Unsaved order found from '+mins+' min ago'+(cp.user?' ('+cp.user+')':'')+'. Restore it?', ()=>{
       currentOrder=cp.order;
       if(cp.tabId)activeTabId=cp.tabId;
       _discountPct=cp.discountPct||0;
@@ -2898,8 +2952,8 @@ function _orderCheckpointRestore(){
       renderOrder();
       showToast('Order restored','success');
       if(typeof _log==='function') _log('info','Recovery','Unsaved order restored from checkpoint',cp.savedAt);
-    }
-    _orderCheckpointClear();
+      _orderCheckpointClear();
+    }, ()=>{ _orderCheckpointClear(); }, {okLabel:'Restore'});
   }catch(e){_orderCheckpointClear();}
 }
 let _orderCheckpointInterval=null;
@@ -3126,26 +3180,33 @@ function openNewTabModal(){
 function createTab(){
   const name=_sanitizeText(document.getElementById('newTabName').value.trim());
   if(!name){showToast('Enter a tab name','error');return;}
-  if(!_checkTabNameCollision(name)) return; // TAB COLLISION: warn if name already in use
   const cardLast4=document.getElementById('newTabCard').value.trim().replace(/\D/g,'').slice(0,4)||null;
-  const now=new Date().toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'});
-  const tab={id:nextTabId++,name,items:[],status:'open',time:now,employeeId:currentUser.id,cardLast4:cardLast4||null};
-  tabs.push(tab);activeTabId=tab.id;
-  saveTabs();renderTabs();closeModal('newTabModal');
-  const cardNote=cardLast4?` · Card ****${cardLast4}`:'';
-  showToast(`Tab opened for ${name}${cardNote}`,'success');
+  const _doCreate=()=>{
+    const now=new Date().toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'});
+    const tab={id:nextTabId++,name,items:[],status:'open',time:now,employeeId:currentUser.id,cardLast4:cardLast4||null};
+    tabs.push(tab);activeTabId=tab.id;
+    saveTabs();renderTabs();closeModal('newTabModal');
+    showToast(`Tab opened for ${name}${cardLast4?` · Card ****${cardLast4}`:''}`, 'success');
+  };
+  if(tabs.some(t=>t.status==='open'&&t.name.toLowerCase()===name.toLowerCase())){
+    _showConfirm(`An open tab named "${name}" already exists. Create another one anyway?`, _doCreate, null, {okLabel:'Create Anyway'});
+  } else { _doCreate(); }
 }
 
 function quickTabConfirm(){
   const name=_sanitizeText(document.getElementById('quickTabName').value.trim());
   if(!name){showToast('Enter a tab name','error');return;}
-  if(!_checkTabNameCollision(name)) return; // TAB COLLISION: warn if name already in use
-  const now=new Date().toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'});
-  const tab={id:nextTabId++,name,items:[],status:'open',time:now,employeeId:currentUser.id,cardLast4:null};
-  tabs.push(tab);activeTabId=tab.id;
-  saveTabs();renderTabs();closeModal('quickTabModal');
-  showToast(`Tab opened for ${name}`,'success');
-  if(_pendingQuickItem){const item=_pendingQuickItem;_pendingQuickItem=null;addToOrder(item);}
+  const _doCreate=()=>{
+    const now=new Date().toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'});
+    const tab={id:nextTabId++,name,items:[],status:'open',time:now,employeeId:currentUser.id,cardLast4:null};
+    tabs.push(tab);activeTabId=tab.id;
+    saveTabs();renderTabs();closeModal('quickTabModal');
+    showToast(`Tab opened for ${name}`,'success');
+    if(_pendingQuickItem){const item=_pendingQuickItem;_pendingQuickItem=null;addToOrder(item);}
+  };
+  if(tabs.some(t=>t.status==='open'&&t.name.toLowerCase()===name.toLowerCase())){
+    _showConfirm(`An open tab named "${name}" already exists. Create another one anyway?`, _doCreate, null, {okLabel:'Create Anyway'});
+  } else { _doCreate(); }
 }
 
 function quickTabSkip(){
@@ -3211,13 +3272,14 @@ function deleteTab(tabId){
   const tab=tabs.find(t=>t.id===tabId);if(!tab)return;
   // Workers can only delete their own tabs; managers/owners can delete any
   if(currentUser.role==='worker'&&tab.employeeId!==currentUser.id){showToast('You can only delete your own tabs','error');return;}
-  if(!confirm(`Delete tab "${tab.name}"? This cannot be undone.`))return;
-  _lockTab(tabId);
-  tabs=tabs.filter(t=>t.id!==tabId);
-  if(activeTabId===tabId){activeTabId=null;currentOrder=[];_noTabSession=false;renderOrder();}
-  saveTabs();renderTabs();
-  _unlockTab(tabId);
-  showToast(`Tab "${tab.name}" deleted`,'success');
+  _showConfirm(`Delete tab "${tab.name}"? This cannot be undone.`, ()=>{
+    _lockTab(tabId);
+    tabs=tabs.filter(t=>t.id!==tabId);
+    if(activeTabId===tabId){activeTabId=null;currentOrder=[];_noTabSession=false;renderOrder();}
+    saveTabs();renderTabs();
+    _unlockTab(tabId);
+    showToast(`Tab "${tab.name}" deleted`,'success');
+  }, null, {danger:true, okLabel:'Delete'});
 }
 
 // ===================== SPLIT BILL =====================
@@ -3336,13 +3398,16 @@ function assignSeat(lineIdx,seatNum){
 }
 
 function getSplitTotal(){
-  // FIX: exclude comped items from the split total (same as getOrderTotal)
-  const subtotal=splitOrderSnapshot.reduce((s,i)=>s+(i.comped?0:(i.price+(i.modTotal||0))*i.qty),0);
-  const tax=subtotal*(settings.taxRate/100);
-  const tip=subtotal*(splitTipPct/100);
-  const grandTotal=subtotal+tax+tip;
-  const perPerson=grandTotal/splitWays;
-  return{subtotal,tax,tip,grandTotal,perPerson};
+  let subtotal=splitOrderSnapshot.reduce((s,i)=>s+(i.comped?0:(i.price+(i.modTotal||0))*i.qty),0);
+  // Apply happy hour discount if active (same as getOrderTotal)
+  let hhDiscount=0;
+  const hh=getActiveHappyHour();
+  if(hh&&hh.discountPct>0){hhDiscount=_currencyRound(subtotal*(hh.discountPct/100));subtotal=_currencyRound(subtotal-hhDiscount);}
+  const tax=_currencyRound(subtotal*(settings.taxRate/100));
+  const tip=_currencyRound(subtotal*(splitTipPct/100));
+  const grandTotal=_currencyRound(subtotal+tax+tip);
+  const perPerson=_currencyRound(grandTotal/splitWays);
+  return{subtotal,tax,tip,grandTotal,perPerson,hhDiscount};
 }
 
 function setSplitWays(n){splitWays=n;renderSplitConfig();}
@@ -3375,20 +3440,21 @@ function setSplitPay(m){splitPayMethod=m;renderSplitPayment();}
 function processSplitPayment(){
   const t=getSplitTotal();
   const person=splitPaid+1;
+  const method=splitPayMethod==='tap'?'Tap to Pay':'Card';
   document.getElementById('splitBody').innerHTML=`
     <div class="processing-overlay"><div class="spinner"></div><div style="font-weight:700">Processing Person ${person}...</div><div style="font-size:1.2rem;font-weight:700;color:var(--accent)">$${t.perPerson.toFixed(2)}</div></div>`;
-  setTimeout(()=>{
-    // Record individual split transaction
+
+  const _recordSplit=(helcimTxId)=>{
     const tx={id:nextTxId++,employeeId:currentUser.id,tabId:splitTabIdSnap,
       items:splitOrderSnapshot,subtotal:t.subtotal/splitWays,tax:t.tax/splitWays,
-      tip:t.tip/splitWays,total:t.perPerson,method:splitPayMethod==='tap'?'Tap to Pay':'Card',
+      tip:t.tip/splitWays,total:t.perPerson,method,
       timestamp:new Date().toISOString(),
       tabName:splitTabIdSnap?tabs.find(tb=>tb.id===splitTabIdSnap)?.name||'Split Sale':'Split Sale',
-      splitInfo:`Split ${person}/${splitWays}`};
+      splitInfo:`Split ${person}/${splitWays}`,
+      helcimTransactionId:helcimTxId||null};
     transactions.push(tx);saveTransactions();
     splitPaid++;
     if(splitPaid>=splitWays){
-      // All paid — close tab if applicable
       if(splitTabIdSnap){const tab=tabs.find(tb=>tb.id===splitTabIdSnap);if(tab){tab.status='closed';tab.closedAt=new Date().toISOString();}saveTabs();}
       document.getElementById('splitBody').innerHTML=`
         <div class="payment-success">
@@ -3400,7 +3466,16 @@ function processSplitPayment(){
     } else {
       renderSplitPayment();
     }
-  },1800);
+  };
+
+  const token=settings.helcimToken||'';
+  const terminalId=settings.helcimTerminal||'';
+  if(token && terminalId){
+    _helcimChargeSplit(token, terminalId, t.perPerson, _recordSplit,
+      ()=>{ document.getElementById('splitBody').innerHTML=`<div style="text-align:center;padding:24px"><div style="font-size:1.1rem;color:var(--red);font-weight:700">Payment Declined</div><button class="btn btn-md btn-ghost" style="margin-top:12px" onclick="renderSplitPayment()">Try Again</button></div>`; });
+  } else {
+    setTimeout(()=>_recordSplit(null), 1800);
+  }
 }
 
 function finishSplit(){
@@ -3449,15 +3524,18 @@ function renderSeatPayment(usedSeats){
 }
 
 function processSeatPayment(usedSeats,seatTotal,seat){
+  const method=splitPayMethod==='tap'?'Tap to Pay':'Card';
   document.getElementById('splitBody').innerHTML=`<div class="processing-overlay"><div class="spinner"></div><div style="font-weight:700">Processing Seat ${seat}…</div><div style="font-size:1.2rem;font-weight:700;color:var(--accent)">$${seatTotal.toFixed(2)}</div></div>`;
-  setTimeout(()=>{
+
+  const _recordSeat=(helcimTxId)=>{
     const seatItems=splitOrderSnapshot.filter((_,i)=>_seatAssignments[i]===seat);
     const tx={id:nextTxId++,employeeId:currentUser.id,tabId:splitTabIdSnap,
       items:seatItems,subtotal:seatItems.reduce((s,i)=>s+(i.comped?0:i.price*i.qty),0),
-      tax:0,tip:0,total:seatTotal,method:splitPayMethod==='tap'?'Tap to Pay':'Card',
+      tax:0,tip:0,total:seatTotal,method,
       timestamp:new Date().toISOString(),
       tabName:splitTabIdSnap?tabs.find(tb=>tb.id===splitTabIdSnap)?.name||'Seat Split':'Seat Split',
-      splitInfo:`Seat ${seat}/${usedSeats.length}`};
+      splitInfo:`Seat ${seat}/${usedSeats.length}`,
+      helcimTransactionId:helcimTxId||null};
     transactions.push(tx);saveTransactions();
     _seatPayIdx++;
     if(_seatPayIdx>=usedSeats.length){
@@ -3466,7 +3544,16 @@ function processSeatPayment(usedSeats,seatTotal,seat){
     } else {
       renderSeatPayment(usedSeats);
     }
-  },1800);
+  };
+
+  const token=settings.helcimToken||'';
+  const terminalId=settings.helcimTerminal||'';
+  if(token && terminalId){
+    _helcimChargeSplit(token, terminalId, seatTotal, _recordSeat,
+      ()=>{ document.getElementById('splitBody').innerHTML=`<div style="text-align:center;padding:24px"><div style="font-size:1.1rem;color:var(--red);font-weight:700">Payment Declined</div><button class="btn btn-md btn-ghost" style="margin-top:12px" onclick="renderSeatPayment(${JSON.stringify(usedSeats)})">Try Again</button></div>`; });
+  } else {
+    setTimeout(()=>_recordSeat(null), 1800);
+  }
 }
 
 // ===================== TAB MERGE =====================
@@ -3592,16 +3679,69 @@ function voidTransaction(id){
     if(typeof _log==='function') _log('warn','Security','Worker tried to void another employee\'s transaction','TX ID: '+id);
     return;
   }
-  if(!confirm('Void this transaction? It will remain in history but be excluded from totals.'))return;
-  tx.voided=true;
-  tx.voidedBy=currentUser?currentUser.name:'Unknown';
-  tx.voidedById=currentUser?currentUser.id:null;
-  tx.voidedAt=new Date().toISOString();
-  saveTransactions();renderReports();
-  showToast('Transaction voided','success');
+  _showConfirm('Void this transaction? It will remain in history but be excluded from totals.', ()=>{
+    tx.voided=true;
+    tx.voidedBy=currentUser?currentUser.name:'Unknown';
+    tx.voidedById=currentUser?currentUser.id:null;
+    tx.voidedAt=new Date().toISOString();
+    saveTransactions();renderReports();
+    showToast('Transaction voided','success');
+  }, null, {danger:true, okLabel:'Void'});
 }
 
 // ===================== REFUND =====================
+function openSplitRefundModal(tabName, totalWays){
+  const portions = transactions.filter(t=>
+    t.tabName===tabName && t.splitInfo && !t.isRefund && !t.refunded && !t.voided
+  );
+  if(portions.length===0){showToast('All split portions have already been refunded','info');return;}
+  const grandTotal = portions.reduce((s,t)=>s+t.total,0);
+  _showConfirm(
+    `Refund all ${portions.length} split portion${portions.length!==1?'s':''} for "${tabName}"?\n\nTotal: $${grandTotal.toFixed(2)}\n\nThis will issue a separate refund for each portion.`,
+    ()=>_executeSplitRefund(portions),
+    null,
+    {danger:true, okLabel:'Refund All'}
+  );
+}
+function _executeSplitRefund(portions){
+  let idx=0;
+  const processNext=()=>{
+    if(idx>=portions.length){
+      showToast(`↩ All ${portions.length} split portions refunded`,'success');
+      renderReports(); return;
+    }
+    const tx=portions[idx++];
+    const isCard=['Tap to Pay','Card','tap','card','chip'].includes(tx.method);
+    const apiToken=settings.helcimToken||'';
+    const sameDay=new Date(tx.timestamp).toDateString()===new Date().toDateString();
+    const currency=settings.helcimCurrency||'USD';
+    const _record=(helcimRefundId,isVoid)=>{
+      tx.refunded=true; tx.refundAmt=tx.total; tx.refundReason='Split bill refund';
+      tx.refundedAt=new Date().toISOString(); tx.refundedBy=currentUser.name;
+      if(isVoid) tx.voided=true;
+      transactions.push({id:nextTxId++,employeeId:currentUser.id,tabId:tx.tabId||null,
+        tabName:tx.tabName,items:tx.items||[],subtotal:-tx.total,tax:0,tip:0,autoGrat:0,
+        total:-tx.total,method:tx.method,timestamp:new Date().toISOString(),
+        isRefund:true,isVoid:isVoid||false,refundForId:tx.id,
+        refundReason:'Split bill refund',helcimRefundId:helcimRefundId||null,
+        splitInfo:tx.splitInfo});
+      saveTransactions(); processNext();
+    };
+    if(isCard && tx.helcimTransactionId && apiToken){
+      const useVoid=sameDay;
+      const path=useVoid?`/v2/card-transactions/${tx.helcimTransactionId}`:`/v2/card-transactions/${tx.helcimTransactionId}/refund`;
+      const opts=useVoid
+        ?{method:'DELETE',headers:{'api-token':apiToken,'accept':'application/json'}}
+        :{method:'POST',headers:{'api-token':apiToken,'Content-Type':'application/json','accept':'application/json'},body:JSON.stringify({amount:parseFloat(tx.total.toFixed(2)),currency})};
+      _helcimFetch(path,opts)
+        .then(r=>r.ok?r.json():r.json().then(e=>{throw new Error(e.errors||e.message||r.status);}))
+        .then(data=>{_record(data.data?.transactionId||data.transactionId||(useVoid?'voided':null),useVoid);})
+        .catch(err=>{showToast(`Portion ${idx} Helcim error: ${err.message||'failed'}`,'error');if(typeof _log==='function')_log('error','Helcim','Split refund failed',err.message);});
+    } else { _record(null,false); }
+  };
+  processNext();
+}
+
 function openRefundModal(txId){
   const tx=transactions.find(t=>t.id===txId);if(!tx)return;
   document.getElementById('refundTxId').value=txId;
@@ -3620,6 +3760,27 @@ function openRefundModal(txId){
     <div style="margin-top:8px;font-size:.78rem;max-height:80px;overflow-y:auto;">
       ${(tx.items||[]).map(i=>`<div style="display:flex;justify-content:space-between;color:var(--text2);"><span>${i.emoji||''} ${i.name} ×${i.qty}</span><span>$${(i.price*i.qty).toFixed(2)}</span></div>`).join('')}
     </div>`;
+  // Show appropriate note depending on whether a live Helcim refund can be issued
+  const noteEl=document.getElementById('refundHelcimNote');
+  if(noteEl){
+    const isCard=['Tap to Pay','Card','tap','card','chip'].includes(tx.method);
+    if(isCard && tx.helcimTransactionId && (settings.helcimToken||'')){
+      const sameDay=new Date(tx.timestamp).toDateString()===new Date().toDateString();
+      noteEl.innerHTML=sameDay
+        ? '✅ <strong style="color:var(--green)">Same-day void:</strong> Transaction will be cancelled before settlement — no interchange fee.'
+        : '✅ <strong style="color:var(--green)">Live refund:</strong> Amount will be returned to the original card automatically via Helcim.';
+      noteEl.style.color='';
+    } else if(tx.voided){
+      noteEl.innerHTML='ℹ️ This transaction was voided same-day — the charge was never settled. A full refund is recorded for your books only; no card action needed.';
+      noteEl.style.color='var(--text2)';
+    } else if(isCard && !tx.helcimTransactionId){
+      noteEl.innerHTML='⚠️ This card transaction has no Helcim ID (processed before live integration). Record the refund here and reverse it manually in your Helcim dashboard.';
+      noteEl.style.color='var(--text2)';
+    } else {
+      noteEl.innerHTML='Cash / tab credit refunds are recorded in the POS only — hand back cash or apply credit as needed.';
+      noteEl.style.color='var(--text2)';
+    }
+  }
   showModal('refundModal');
 }
 
@@ -3650,6 +3811,11 @@ function confirmRefund(){
     closeModal('refundModal');
     return;
   }
+  // ── GUARD: block partial refund on a voided transaction ───────────────────
+  if(tx.voided && _refundType==='partial'){
+    showToast('This transaction was voided — partial refunds are not available. The full amount was never settled.','error');
+    return;
+  }
   let amt;
   if(_refundType==='full'){
     amt=tx.total;
@@ -3659,33 +3825,79 @@ function confirmRefund(){
     if(amt>tx.total){showToast(`Amount can't exceed original $${tx.total.toFixed(2)}`,'error');return;}
   }
   const method=methodSel==='same'?tx.method:methodSel;
-  // Mark original as refunded
-  tx.refunded=true;
-  tx.refundAmt=amt;
-  tx.refundReason=reason;
-  tx.refundedAt=new Date().toISOString();
-  tx.refundedBy=currentUser.name;
-  // Create a negative refund transaction
-  const refundTx={
-    id:nextTxId++,
-    employeeId:currentUser.id,
-    tabId:tx.tabId||null,
-    tabName:tx.tabName||'Quick Sale',
-    items:tx.items||[],
-    subtotal:-amt,tax:0,tip:0,autoGrat:0,
-    total:-amt,
-    method,
-    timestamp:new Date().toISOString(),
-    isRefund:true,
-    refundForId:txId,
-    refundReason:reason,
-    partialInfo:_refundType==='partial'?`Partial refund $${amt.toFixed(2)} of $${tx.total.toFixed(2)}`:null
+
+  const _recordRefund=(helcimRefundId, isVoid=false)=>{
+    tx.refunded=true;
+    tx.refundAmt=amt;
+    tx.refundReason=reason;
+    tx.refundedAt=new Date().toISOString();
+    tx.refundedBy=currentUser.name;
+    if(isVoid) tx.voided=true;
+    const refundTx={
+      id:nextTxId++,
+      employeeId:currentUser.id,
+      tabId:tx.tabId||null,
+      tabName:tx.tabName||'Quick Sale',
+      items:tx.items||[],
+      subtotal:-amt,tax:0,tip:0,autoGrat:0,
+      total:-amt,
+      method,
+      timestamp:new Date().toISOString(),
+      isRefund:true,
+      isVoid:isVoid||false,
+      refundForId:txId,
+      refundReason:reason,
+      helcimRefundId:helcimRefundId||null,
+      partialInfo:_refundType==='partial'?`Partial refund $${amt.toFixed(2)} of $${tx.total.toFixed(2)}`:null
+    };
+    transactions.push(refundTx);
+    saveTransactions();
+    closeModal('refundModal');
+    const action = isVoid ? 'voided' : helcimRefundId ? 'refunded via Helcim' : 'recorded';
+    showToast(`↩ $${amt.toFixed(2)} ${action}`, helcimRefundId?'success':'info');
+    renderReports();
   };
-  transactions.push(refundTx);
-  saveTransactions();
-  closeModal('refundModal');
-  showToast(`↩ $${amt.toFixed(2)} refund recorded`,'info');
-  renderReports();
+
+  // ── Try Helcim API void/refund if card transaction has a helcimTransactionId ─
+  const isCard = ['Tap to Pay','Card','tap','card','chip'].includes(tx.method);
+  const apiToken = settings.helcimToken||'';
+  if(isCard && tx.helcimTransactionId && apiToken){
+    const refundBtn=document.querySelector('#refundModal .modal-footer .btn-blue');
+    if(refundBtn){refundBtn.disabled=true;refundBtn.textContent='Processing…';}
+
+    // Same-day full refund → void (cheaper, cancels before settlement)
+    const txDate = new Date(tx.timestamp);
+    const today  = new Date();
+    const sameDay = txDate.toDateString() === today.toDateString();
+    const isFullRefund = _refundType === 'full';
+    const useVoid = sameDay && isFullRefund;
+
+    const currency = settings.helcimCurrency || 'USD';
+    const apiPath  = useVoid
+      ? `/v2/card-transactions/${tx.helcimTransactionId}`          // DELETE = void
+      : `/v2/card-transactions/${tx.helcimTransactionId}/refund`;  // POST   = refund
+
+    const fetchOpts = useVoid
+      ? { method:'DELETE', headers:{'api-token':apiToken,'accept':'application/json'} }
+      : { method:'POST',   headers:{'api-token':apiToken,'Content-Type':'application/json','accept':'application/json'},
+          body:JSON.stringify({amount:parseFloat(amt.toFixed(2)), currency}) };
+
+    _helcimFetch(apiPath, fetchOpts)
+    .then(r=>r.ok?r.json():r.json().then(e=>{throw new Error(e.errors||e.message||r.status);}))
+    .then(data=>{
+      const helcimRefundId = data.data?.transactionId || data.transactionId || (useVoid?'voided':null);
+      _recordRefund(helcimRefundId, useVoid);
+    })
+    .catch(err=>{
+      const btn=document.querySelector('#refundModal .modal-footer .btn-blue');
+      if(btn){btn.disabled=false;btn.textContent='↩ Issue Refund';}
+      showToast((useVoid?'Void':'Refund')+' failed: '+(err.message||'Unknown error'),'error');
+      if(typeof _log==='function') _log('error','Helcim',(useVoid?'Void':'Refund')+' API failed',err.message||String(err));
+    });
+  } else {
+    // Cash, tab credit, or no helcim ID — record locally only
+    _recordRefund(null, false);
+  }
 }
 
 // ===================== DISPUTE =====================
@@ -3722,13 +3934,14 @@ function confirmDispute(){
 
 function resolveDispute(txId){
   const tx=transactions.find(t=>t.id===txId);if(!tx)return;
-  if(!confirm(`Mark dispute on "${tx.tabName||'Quick Sale'}" as resolved?`))return;
-  tx.disputeResolved=true;
-  tx.resolvedAt=new Date().toISOString();
-  tx.resolvedBy=currentUser.name;
-  saveTransactions();
-  showToast('Dispute resolved','success');
-  renderReports();
+  _showConfirm(`Mark dispute on "${tx.tabName||'Quick Sale'}" as resolved?`, ()=>{
+    tx.disputeResolved=true;
+    tx.resolvedAt=new Date().toISOString();
+    tx.resolvedBy=currentUser.name;
+    saveTransactions();
+    showToast('Dispute resolved','success');
+    renderReports();
+  }, null, {okLabel:'Resolve'});
 }
 
 function renderDisputesList(){
@@ -3969,13 +4182,9 @@ function printCashRecon(){
   if(!el)return;
   const clone=el.cloneNode(true);
   clone.querySelectorAll('button,input,textarea').forEach(n=>n.remove());
-  const w=window.open('','_blank','width=480,height=700');
-  w.document.write(`<html><head><title>Cash Reconciliation — ${settings.barName}</title><style>
-    body{font-family:'Segoe UI',sans-serif;padding:20px;max-width:420px;font-size:13px;}
-    .eod-row{display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px solid #eee;}
-    .eod-section{font-weight:700;font-size:.75rem;text-transform:uppercase;color:#888;margin:10px 0 5px;}
-  </style></head><body>${clone.innerHTML}</body></html>`);
-  w.document.close();w.print();
+  _printInPage(`<div style="font-family:'Segoe UI',sans-serif;padding:20px;max-width:420px;font-size:13px;">
+    <style>.eod-row{display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px solid #eee;}.eod-section{font-weight:700;font-size:.75rem;text-transform:uppercase;color:#888;margin:10px 0 5px;}</style>
+    ${clone.innerHTML}</div>`, 'Cash Reconciliation — '+settings.barName);
 }
 
 // Reset reconciliation each new day
@@ -3991,32 +4200,19 @@ function printCashRecon(){
 
 function printEOD(){
   const viewLabel=_eodView==='bar'?'Bar Report':_eodView==='kitchen'?'Kitchen Report':'Full Report';
-  const w=window.open('','_blank','width=500,height=700');
-  // Strip the tab-switcher buttons from the printed output
   const bodyEl=document.getElementById('eodBody');
   const clone=bodyEl.cloneNode(true);
   const btnRow=clone.querySelector('div[style*="display:flex;gap:6px;margin-bottom:14px"]');
   if(btnRow)btnRow.remove();
+  clone.querySelectorAll('button').forEach(b=>b.remove());
   const printHtml=clone.innerHTML
-    .replace(/class="eod-stat"/g,'class="stat"')
-    .replace(/class="eod-stat-val"/g,'class="stat-val"')
-    .replace(/class="eod-stat-label"/g,'class="stat-label"')
-    .replace(/class="eod-grid"/g,'class="grid"')
-    .replace(/class="eod-row"/g,'class="row"')
-    .replace(/class="eod-section"/g,'class="section"')
+    .replace(/class="eod-stat"/g,'class="stat"').replace(/class="eod-stat-val"/g,'class="stat-val"')
+    .replace(/class="eod-stat-label"/g,'class="stat-label"').replace(/class="eod-grid"/g,'class="grid"')
+    .replace(/class="eod-row"/g,'class="row"').replace(/class="eod-section"/g,'class="section"')
     .replace(/class="open-tab-warn"/g,'class="warn"');
-  w.document.write(`<html><head><title>${viewLabel} - ${settings.barName}</title><style>
-    body{font-family:'Segoe UI',sans-serif;padding:24px;max-width:420px;font-size:13px;}
-    .grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:12px 0;}
-    .stat{background:#f5f5f5;border-radius:8px;padding:12px;text-align:center;}
-    .stat-val{font-size:1.4rem;font-weight:700;}
-    .stat-label{font-size:.7rem;color:#666;margin-top:2px;}
-    .row{display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid #eee;font-size:.85rem;}
-    .section{font-weight:700;margin:12px 0 6px;font-size:.75rem;text-transform:uppercase;color:#888;letter-spacing:.5px;}
-    .warn{background:#fee;border:1px solid #f99;border-radius:6px;padding:8px 10px;font-size:.78rem;color:#c00;margin-bottom:10px;}
-    button{display:none;}
-  </style></head><body>${printHtml}</body></html>`);
-  w.document.close();w.print();
+  _printInPage(`<div style="font-family:'Segoe UI',sans-serif;padding:24px;max-width:420px;font-size:13px;">
+    <style>.grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:12px 0;}.stat{background:#f5f5f5;border-radius:8px;padding:12px;text-align:center;}.stat-val{font-size:1.4rem;font-weight:700;}.stat-label{font-size:.7rem;color:#666;margin-top:2px;}.row{display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid #eee;font-size:.85rem;}.section{font-weight:700;margin:12px 0 6px;font-size:.75rem;text-transform:uppercase;color:#888;letter-spacing:.5px;}.warn{background:#fee;border:1px solid #f99;border-radius:6px;padding:8px 10px;font-size:.78rem;color:#c00;margin-bottom:10px;}</style>
+    ${printHtml}</div>`, viewLabel+' — '+settings.barName);
 }
 
 // ===================== TAB TRANSFER =====================
@@ -4071,7 +4267,8 @@ function renderCheckoutBody(){
   // Auto-gratuity: check raw (pre-discount) subtotal
   const rawSubtotal=currentOrder.reduce((s,i)=>s+(i.comped?0:(i.price+(i.modTotal||0))*i.qty),0);
   const autoGrat=(!_discountReason&&!selectedTip)?getAutoGratuity(rawSubtotal):0; // only if no manual tip
-  const finalTotal=t.subtotal+t.tax+tip+autoGrat;
+  const finalTotal=_currencyRound(t.subtotal+t.tax+tip+autoGrat);
+  _lastFinalTotal=finalTotal; // keep in sync so cash drawer always has the correct total
   const canSkipGrat=(currentUser.role==='owner'||currentUser.role==='manager');
 
   // Build item rows — comped items shown struck through
@@ -4131,7 +4328,10 @@ function renderCheckoutBody(){
           ${selectedPayMethod==='tap'?'📱 Present Device to Reader':'💳 Process Card'} — ${_payCountdown>0?_payCountdown+'s…':'tap to begin'}
         </button>
         ${_payCountdown>0?`<button class="btn btn-lg btn-cancel-pay" onclick="cancelPayCountdown()">✕ Cancel</button>`:''}
-        <div style="font-size:.7rem;color:var(--text2);text-align:center;margin-top:6px">⚠️ Simulation mode — Helcim key not connected</div>`
+        ${(settings.helcimToken&&settings.helcimTerminal)
+          ? `<div style="font-size:.7rem;color:var(--text2);text-align:center;margin-top:6px">💳 Tip included in charge · refundable same-day void</div>`
+          : `<div style="font-size:.7rem;color:var(--text2);text-align:center;margin-top:6px">⚠️ Simulation mode — Helcim key not connected</div>`
+        }`
     }`;
 }
 
@@ -4187,8 +4387,11 @@ function openCashDrawer(total){
   const bills=document.getElementById('cashDrawerQuickBills');
   if(!drawer||!numpad||!bills)return;
   numpad.innerHTML=['1','2','3','4','5','6','7','8','9','⌫','0','.'].map(k=>`<div class="tip-numpad-btn${k==='⌫'?' backspace':''}" onclick="cashDrawerPress('${k}')">${k}</div>`).join('');
-  const billAmts=[5,10,20,50,100].filter(b=>b>=total-0.01).slice(0,3);
-  bills.innerHTML=billAmts.map(b=>`<button class="btn btn-sm btn-ghost" onclick="cashDrawerBill(${b})">\$${b}</button>`).join('')+`<button class="btn btn-sm btn-ghost" onclick="cashDrawerBill(${Math.ceil(total*100)/100})">Exact</button>`;
+  bills.style.gridTemplateColumns='repeat(5,1fr)';
+  const exact=Math.round(total*100)/100;
+  bills.innerHTML=
+    [10,20,50,100].map(b=>`<button class="btn btn-sm btn-ghost" onclick="cashDrawerBill(${b})">\$${b}</button>`).join('')+
+    `<button class="btn btn-sm btn-accent" onclick="cashDrawerExact(${exact})">Exact<br><span style="font-size:.7rem;opacity:.85">$${exact.toFixed(2)}</span></button>`;
   _updateCashDrawerDisplay();
   drawer.classList.add('open');
   const modal=document.getElementById('checkoutModal');
@@ -4213,6 +4416,13 @@ function cashDrawerPress(key){
 }
 function cashDrawerBill(amt){
   _cashGivenRaw=amt.toFixed(2);
+  _updateCashDrawerDisplay();
+  const el=document.getElementById('cashTendered');
+  if(el)el.value=_cashGivenRaw;
+}
+function cashDrawerExact(total){
+  _cashGivenRaw=total.toFixed(2);
+  _lastFinalTotal=total;
   _updateCashDrawerDisplay();
   const el=document.getElementById('cashTendered');
   if(el)el.value=_cashGivenRaw;
@@ -4459,13 +4669,18 @@ function _processPaymentInner(){
     );
     if(_dupCheck){
       const _secsAgo=Math.round((Date.now()-new Date(_dupCheck.timestamp).getTime())/1000);
-      if(!confirm('\u26a0\ufe0f A $'+finalTotal.toFixed(2)+' transaction on this tab was just processed '+_secsAgo+'s ago. Process again?')){
-        _hidePayLock();_unlockTab(checkoutTabId);
-        closeModal('checkoutModal');
-        if(typeof _log==='function') _log('warn','Duplicate TX','Duplicate charge blocked','Tab: '+checkoutTabId+' $'+finalTotal.toFixed(2));
-        return;
-      }
+      _hidePayLock();
+      _showConfirm('\u26a0\ufe0f A $'+finalTotal.toFixed(2)+' transaction on this tab was just processed '+_secsAgo+'s ago. Process again?',
+        ()=>_doRecord(),
+        ()=>{ _unlockTab(checkoutTabId); closeModal('checkoutModal');
+          if(typeof _log==='function') _log('warn','Duplicate TX','Duplicate charge blocked','Tab: '+checkoutTabId+' $'+finalTotal.toFixed(2)); },
+        {danger:true, okLabel:'Process Again', cancelLabel:'Cancel'}
+      );
+      return;
     }
+    _doRecord();
+    function _doRecord(){
+    _showPayLock(isCash?'Recording payment\u2026':'Finalising\u2026');
     const txTimestamp=new Date().toISOString();
     const tx={id:nextTxId++,employeeId:currentUser.id,tabId:checkoutTabId,
       items:currentOrder.map(i=>({...i})),
@@ -4474,11 +4689,13 @@ function _processPaymentInner(){
       tabName:checkoutTabId?tabs.find(tb=>tb.id===checkoutTabId)?.name||'Quick Sale':'Quick Sale',
       discountReason:_sanitizeText(_discountReason||''),discountPct:_discountPct,discountFlat:_discountFlat,
       hhDiscountAmt:t.hhDiscount||0,hhName:(!_discountReason&&t.hhDiscount>0)?(getActiveHappyHour()?.name||'Happy Hour'):'',
-      compTotal
+      compTotal,
+      helcimTransactionId: _pendingHelcimTxId||null
     };
+    _pendingHelcimTxId = null;
     // Store for receipt
     lastPayMethod=method; lastCashTendered=cashTendered; lastChangeDue=changeDue;
-    lastTxId=tx.id; lastTxTimestamp=txTimestamp;
+    lastTxId=tx.id; lastTxTimestamp=txTimestamp; lastHelcimTxId=tx.helcimTransactionId||null;
     transactions.push(tx);saveTransactions();
     if(checkoutTabId){const tab=tabs.find(tb=>tb.id===checkoutTabId);if(tab){tab.status='closed';tab.closedAt=new Date().toISOString();}saveTabs();_unlockTab(checkoutTabId);}
     _hidePayLock();
@@ -4502,12 +4719,13 @@ function _processPaymentInner(){
         <button class="btn btn-lg btn-blue" style="width:100%;margin-top:8px;font-size:1rem;" onclick="finishPayment(true)">🖨 Print Receipt</button>
         <button class="btn btn-md btn-ghost" style="width:100%;margin-top:6px;" onclick="finishPayment(false)">Skip — Done</button>
       </div>`;
+    } // end _doRecord
   };
 
   if(isCash){
     recordAndShow();
   } else {
-    // LOCK TAB IMMEDIATELY before the 2-second spinner — prevents duplicate charge from a second device tap
+    // LOCK TAB IMMEDIATELY — prevents duplicate charge from a second device tap
     if(checkoutTabId) _lockTab(checkoutTabId);
     document.getElementById('checkoutBody').innerHTML=`
       <div class="processing-overlay">
@@ -4516,9 +4734,145 @@ function _processPaymentInner(){
         <div style="font-size:.8rem;color:var(--text2)">${selectedPayMethod==='tap'?'Hold device near reader':'Insert or tap card'}</div>
         <div style="font-size:1.4rem;font-weight:700;color:var(--accent)">$${finalTotal.toFixed(2)}</div>
       </div>`;
-    setTimeout(recordAndShow,2000);
+
+    const token=settings.helcimToken||'';
+    const terminalId=settings.helcimTerminal||'';
+
+    if(!token||!terminalId){
+      // No credentials — simulation mode
+      if(typeof _log==='function') _log('warn','Helcim','No API token/terminal — running in simulation mode',null);
+      setTimeout(recordAndShow, 2000);
+    } else {
+      // Real Helcim Pay JS flow
+      _helcimCharge(token, terminalId, finalTotal, recordAndShow);
+    }
   }
 } // end _processPaymentInner
+
+// ── Helcim API fetch (routes through proxy if configured) ─────────────────────
+function _helcimFetch(path, options){
+  const proxy = (settings.helcimProxy||'').replace(/\/$/,'');
+  const base  = proxy || 'https://api.helcim.com';
+  return fetch(base + path, options);
+}
+
+// ── Helcim Pay JS charge ──────────────────────────────────────────────────────
+let _helcimMsgHandler = null;
+function _helcimCharge(apiToken, terminalId, amount, onSuccess){
+  const termInt = parseInt(terminalId);
+  if(!termInt || isNaN(termInt)){
+    showToast('Invalid Helcim Terminal ID — check Settings','error');
+    _hidePayLock();
+    if(typeof checkoutTabId!=='undefined'&&checkoutTabId) _unlockTab(checkoutTabId);
+    renderCheckoutBody();
+    return;
+  }
+  const currency = settings.helcimCurrency || 'USD';
+  // 1. Initialize checkout token from Helcim
+  _helcimFetch('/v2/helcim-pay/initialize', {
+    method: 'POST',
+    headers: { 'api-token': apiToken, 'Content-Type': 'application/json', 'accept': 'application/json' },
+    body: JSON.stringify({
+      paymentType: 'purchase',
+      amount: parseFloat(amount.toFixed(2)),
+      currency,
+      helcimTerminalId: termInt
+    })
+  })
+  .then(r => r.ok ? r.json() : r.json().then(e=>{ throw new Error(e.errors||e.message||r.status); }))
+  .then(data => {
+    const checkoutToken = data.checkoutToken;
+    if(!checkoutToken) throw new Error('No checkout token returned');
+
+    // 2. Remove any prior listener
+    if(_helcimMsgHandler) window.removeEventListener('message', _helcimMsgHandler);
+
+    // 3. Listen for Helcim Pay JS response
+    _helcimMsgHandler = function(evt){
+      let payload;
+      try{ payload = typeof evt.data==='string' ? JSON.parse(evt.data) : evt.data; }
+      catch(e){ return; }
+
+      if(!payload || payload.eventName !== 'helcimPayJsObjectResponse') return;
+      window.removeEventListener('message', _helcimMsgHandler);
+      _helcimMsgHandler = null;
+
+      if(payload.eventStatus === 'FAILED'){
+        _hidePayLock();
+        if(typeof checkoutTabId!=='undefined'&&checkoutTabId) _unlockTab(checkoutTabId);
+        showToast('Payment declined: '+(payload.eventMessage||'Card declined'),'error');
+        // Restore checkout UI — guard in case modal was closed mid-flight
+        try{
+          if(document.getElementById('checkoutModal')&&!document.getElementById('checkoutModal').classList.contains('hidden')){
+            renderCheckoutBody();
+          }
+        }catch(e){ if(typeof _log==='function') _log('warn','Helcim','renderCheckoutBody after decline failed',e.message); }
+        return;
+      }
+
+      // Success — stash helcim transaction ID then record
+      const helcimData = payload.eventData || {};
+      _pendingHelcimTxId = helcimData.transactionId || helcimData.data?.transactionId || null;
+      onSuccess();
+    };
+    window.addEventListener('message', _helcimMsgHandler);
+
+    // 4. Launch Helcim Pay JS modal
+    if(typeof appendHelcimPayIframe === 'function'){
+      appendHelcimPayIframe(checkoutToken);
+    } else {
+      throw new Error('Helcim Pay JS not loaded');
+    }
+  })
+  .catch(err => {
+    _hidePayLock();
+    if(typeof checkoutTabId!=='undefined'&&checkoutTabId) _unlockTab(checkoutTabId);
+    showToast('Helcim error: '+(err.message||'Could not connect'),'error');
+    if(typeof _log==='function') _log('error','Helcim','Charge failed',err.message||String(err));
+    try{
+      if(document.getElementById('checkoutModal')&&!document.getElementById('checkoutModal').classList.contains('hidden')){
+        renderCheckoutBody();
+      }
+    }catch(e){}
+  });
+}
+let _pendingHelcimTxId = null;
+
+// ── Helcim charge for split/seat payments (updates splitBody, not checkoutBody) ─
+function _helcimChargeSplit(apiToken, terminalId, amount, onSuccess, onFail){
+  const termInt=parseInt(terminalId);
+  const currency=settings.helcimCurrency||'USD';
+  _helcimFetch('/v2/helcim-pay/initialize',{
+    method:'POST',
+    headers:{'api-token':apiToken,'Content-Type':'application/json','accept':'application/json'},
+    body:JSON.stringify({paymentType:'purchase',amount:parseFloat(amount.toFixed(2)),currency,helcimTerminalId:termInt})
+  })
+  .then(r=>r.ok?r.json():r.json().then(e=>{throw new Error(e.errors||e.message||r.status);}))
+  .then(data=>{
+    const checkoutToken=data.checkoutToken;
+    if(!checkoutToken) throw new Error('No checkout token');
+    if(_helcimMsgHandler) window.removeEventListener('message',_helcimMsgHandler);
+    _helcimMsgHandler=function(evt){
+      let payload;
+      try{payload=typeof evt.data==='string'?JSON.parse(evt.data):evt.data;}catch(e){return;}
+      if(!payload||payload.eventName!=='helcimPayJsObjectResponse') return;
+      window.removeEventListener('message',_helcimMsgHandler);_helcimMsgHandler=null;
+      if(payload.eventStatus==='FAILED'){onFail&&onFail();return;}
+      const helcimData=payload.eventData||{};
+      const txId=helcimData.transactionId||helcimData.data?.transactionId||null;
+      onSuccess(txId);
+    };
+    window.addEventListener('message',_helcimMsgHandler);
+    if(typeof appendHelcimPayIframe==='function') appendHelcimPayIframe(checkoutToken);
+    else throw new Error('Helcim Pay JS not loaded');
+  })
+  .catch(err=>{
+    showToast('Helcim error: '+(err.message||'Could not connect'),'error');
+    if(typeof _log==='function') _log('error','Helcim','Split charge failed',err.message||String(err));
+    onFail&&onFail();
+  });
+}
+// ─────────────────────────────────────────────────────────────────────────────
 
 // ===================== POST-PAYMENT TIP =====================
 function openPostTipModal(txId){
@@ -4626,9 +4980,7 @@ function openCloseShift(){
 function printShiftSummary(){
   const el=document.getElementById('shiftSummaryPrint');
   if(!el)return;
-  const w=window.open('','_blank','width=400,height=600');
-  w.document.write(`<html><head><title>Shift Summary</title><style>body{font-family:Arial,sans-serif;padding:20px;font-size:13px;}h2{text-align:center;}table{width:100%;border-collapse:collapse;}td,th{padding:6px;border-bottom:1px solid #ddd;}</style></head><body>${el.innerHTML}</body></html>`);
-  w.document.close();w.print();
+  _printInPage(`<div style="font-family:Arial,sans-serif;padding:20px;font-size:13px;"><style>h2{text-align:center;}table{width:100%;border-collapse:collapse;}td,th{padding:6px;border-bottom:1px solid #ddd;}</style>${el.innerHTML}</div>`,'Shift Summary');
 }
 function exportShiftCSV(){
   if(!currentUser)return;
@@ -4732,6 +5084,7 @@ function viewTransaction(txId){
   lastTxId=tx.id; lastTxTimestamp=tx.timestamp; lastPayMethod=tx.method||'';
   lastCashTendered=tx.cashTendered||0; lastChangeDue=tx.changeDue||0;
   lastDiscountReason=tx.discountReason||''; lastDiscountPct=tx.discountPct||0; lastDiscountFlat=tx.discountAmt||0;
+  lastHelcimTxId=tx.helcimTransactionId||null;
   _lastReceiptItems=items; _lastReceiptSubtotal=subtotal; _lastReceiptTax=tax; _lastReceiptTip=tip; _lastReceiptAutoGrat=autoGrat;
 
   document.getElementById('receiptBody').innerHTML=html;
@@ -4779,6 +5132,7 @@ ${settings.barPhone?`<p class="sub">${settings.barPhone}</p>`:''}
   ${lastDiscountReason?`<tr><td>Discount (${lastDiscountReason})</td><td style="text-align:right;color:#e44">–${lastDiscountPct>0?lastDiscountPct+'%':'$'+lastDiscountFlat.toFixed(2)}</td></tr>`:''}
   <tr class="grand"><td>TOTAL</td><td style="text-align:right">$${total.toFixed(2)}</td></tr>
   <tr><td>Payment</td><td style="text-align:right">${lastPayMethod||'—'}</td></tr>
+  ${lastHelcimTxId?`<tr><td style="color:#888;font-size:7pt">Helcim Ref</td><td style="text-align:right;color:#888;font-size:7pt">${lastHelcimTxId}</td></tr>`:''}
 </table>
 ${footer}
 <p class="footer">Processed by Helcim</p>
@@ -4865,6 +5219,7 @@ function buildReceiptHTML(items,subtotal,tax,tip,forPrint,autoGrat=0){
     ${hr}
     <div style="display:flex;justify-content:space-between;font-size:${forPrint?'9pt':'.75rem'};"><span>Payment</span><span>${lastPayMethod||'—'}</span></div>
     ${isCash?`<div style="display:flex;justify-content:space-between;font-size:${forPrint?'9pt':'.75rem'};"><span>Cash Tendered</span><span>$${lastCashTendered.toFixed(2)}</span></div><div style="display:flex;justify-content:space-between;font-weight:700;font-size:${forPrint?'10pt':'.82rem'};"><span>Change Due</span><span>$${lastChangeDue.toFixed(2)}</span></div>`:''}
+    ${lastHelcimTxId?`<div style="display:flex;justify-content:space-between;font-size:${forPrint?'7pt':'.65rem'};color:#999;margin-top:2px;"><span>Helcim Ref</span><span>${lastHelcimTxId}</span></div>`:''}
     ${dhr}
     ${settings.receiptFooter?`<div style="text-align:center;font-size:${forPrint?'9pt':'.7rem'};margin-top:6px;white-space:pre-line;">${settings.receiptFooter}</div>`:''}
     ${settings.showReceiptQR&&!forPrint?buildReceiptQR(items,subtotal,tax,tip,autoGrat):''}
@@ -4892,30 +5247,9 @@ function showReceiptModal(items,subtotal,tax,tip,autoGrat=0,hhDiscountAmt=0){
 }
 
 function printReceipt(){
-  _logReprint(lastTxId); // REPRINT LOG: record who reprinted and when
+  _logReprint(lastTxId);
   const html=buildReceiptHTML(_lastReceiptItems,_lastReceiptSubtotal,_lastReceiptTax,_lastReceiptTip,true,_lastReceiptAutoGrat);
-  const w=window.open('','_blank','width=420,height=650');
-  if(!w){showToast('Allow pop-ups to print receipts','error');return;}
-  w.document.write(`<!DOCTYPE html><html><head><title>Receipt #${lastTxId||''}</title></head><body style="margin:0;padding:0;background:#fff;">${html}</body></html>`);
-  w.document.close();
-  // NETWORK FIX: retry print up to 2 times if printer times out; give up gracefully
-  let _printAttempts=0;
-  const _tryPrint=()=>{
-    _printAttempts++;
-    try{
-      w.print();
-    } catch(e){
-      if(_printAttempts<2){
-        showToast('Printer not responding — retrying...','warn');
-        setTimeout(_tryPrint, 3000);
-      } else {
-        showToast('Could not reach printer. Receipt saved — try reprinting from Reports.','error');
-        if(typeof _log==='function') _log('warn','Printer','Print failed after 2 attempts',e&&e.message||'');
-        try{w.close();}catch(_){}
-      }
-    }
-  };
-  setTimeout(_tryPrint, 300);
+  _printInPage(html, 'Receipt #'+(lastTxId||''));
 }
 
 // ===================== REPORTS =====================
@@ -5115,8 +5449,11 @@ function renderReports(){
       const viewBtn=`<button class="btn btn-sm btn-ghost" style="padding:3px 6px;font-size:.68rem" onclick="viewTransaction(${tx.id})">👁</button>`;
       const voidBtn=canVoid&&!tx.voided&&!tx.isRefund?`<button class="btn btn-sm btn-red" style="padding:3px 6px;font-size:.68rem" onclick="voidTransaction(${tx.id})">Void</button>`:'';
       const refundBtn=!tx.voided&&!tx.isRefund&&!tx.refunded?`<button class="btn btn-sm btn-blue" style="padding:3px 6px;font-size:.68rem" onclick="openRefundModal(${tx.id})">↩ Refund</button>`:'';
+      // For split transactions, show a "Refund All Splits" button on the first portion only
+      const isSplitFirst=tx.splitInfo&&tx.splitInfo.includes('1/')&&!tx.isRefund&&!tx.refunded;
+      const splitRefundBtn=isSplitFirst?`<button class="btn btn-sm btn-blue" style="padding:3px 6px;font-size:.68rem;background:var(--purple)" onclick="openSplitRefundModal('${tx.tabName||''}','${tx.splitInfo?.split('/')[1]||''}')">↩ All</button>`:'';
       const flagBtn=canVoid&&!tx.voided&&!tx.isRefund&&!tx.disputed?`<button class="btn btn-sm btn-ghost" style="padding:3px 6px;font-size:.68rem;color:#f97316" onclick="openDisputeModal(${tx.id})">🚩</button>`:canVoid&&tx.disputed&&!tx.disputeResolved?`<button class="btn btn-sm btn-ghost" style="padding:3px 6px;font-size:.68rem;color:var(--green)" onclick="resolveDispute(${tx.id})">✅</button>`:'';
-      return`<tr class="${rowClass}"><td style="color:var(--text2)">${time}</td><td>${tx.tabName||'Quick Sale'}${discBadge}${disputeBadge}${refundBadge}${tx.splitInfo?` <span style="font-size:.65rem;color:var(--purple)">${tx.splitInfo}</span>`:tx.partialInfo?` <span style="font-size:.65rem;color:var(--text2)">${tx.partialInfo}</span>`:''}</td><td>${emp?emp.emoji+' '+emp.name:'Unknown'}</td><td>${tx.method}</td><td style="font-weight:700;color:${amtColor}">${tx.voided?'<span class="void-badge">VOID</span> ':''} ${amtDisplay}</td><td style="white-space:nowrap"><div style="display:flex;gap:3px;">${viewBtn}${refundBtn}${voidBtn}${flagBtn}</div></td></tr>`;
+      return`<tr class="${rowClass}"><td style="color:var(--text2)">${time}</td><td>${tx.tabName||'Quick Sale'}${discBadge}${disputeBadge}${refundBadge}${tx.splitInfo?` <span style="font-size:.65rem;color:var(--purple)">${tx.splitInfo}</span>`:tx.partialInfo?` <span style="font-size:.65rem;color:var(--text2)">${tx.partialInfo}</span>`:''}</td><td>${emp?emp.emoji+' '+emp.name:'Unknown'}</td><td>${tx.method}</td><td style="font-weight:700;color:${amtColor}">${tx.voided?'<span class="void-badge">VOID</span> ':''} ${amtDisplay}</td><td style="white-space:nowrap"><div style="display:flex;gap:3px;">${viewBtn}${refundBtn}${splitRefundBtn}${voidBtn}${flagBtn}</div></td></tr>`;
     }).join(''));
 }
 
@@ -5187,9 +5524,10 @@ function saveEmployee(){
 }
 
 function deleteEmployee(id){
-  if(!confirm('Remove this employee?'))return;
-  employees=employees.filter(e=>e.id!==id);
-  saveEmployees();renderEmpList();showToast('Employee removed','success');
+  _showConfirm('Remove this employee?', ()=>{
+    employees=employees.filter(e=>e.id!==id);
+    saveEmployees();renderEmpList();showToast('Employee removed','success');
+  }, null, {danger:true, okLabel:'Remove'});
 }
 
 // ===================== MENU TABLE =====================
@@ -5392,9 +5730,13 @@ function addModGroup(){
 
 function deleteModGroup(gi){
   const g=_editingModGroups[gi];
-  if(g.mods.length>0&&!confirm(`Delete "${g.name||'this group'}" and its ${g.mods.length} option(s)?`))return;
-  _editingModGroups.splice(gi,1);
-  renderModGroupEditor();
+  if(g.mods.length>0){
+    _showConfirm(`Delete "${g.name||'this group'}" and its ${g.mods.length} option(s)?`, ()=>{
+      _editingModGroups.splice(gi,1); renderModGroupEditor();
+    }, null, {danger:true, okLabel:'Delete'});
+  } else {
+    _editingModGroups.splice(gi,1); renderModGroupEditor();
+  }
 }
 
 function addModToGroup(gi){
@@ -5414,11 +5756,11 @@ function addModToGroup(gi){
 function editModPrice(gi,mi){
   const g=_editingModGroups[gi];if(!g)return;
   const mo=normMod(g.mods[mi]);
-  const raw=prompt(`Upcharge price for "${mo.name}" (0 = free):`,mo.price.toFixed(2));
-  if(raw===null)return;
-  const price=parseFloat(raw)||0;
-  g.mods[mi]=price>0?{name:mo.name,price}:mo.name;
-  renderModGroupEditor();
+  _showPrompt(`Upcharge price for "${mo.name}" (0 = free):`, mo.price.toFixed(2), raw=>{
+    const price=parseFloat(raw)||0;
+    g.mods[mi]=price>0?{name:mo.name,price}:mo.name;
+    renderModGroupEditor();
+  });
 }
 function removeModFromGroup(gi,mi){
   _editingModGroups[gi].mods.splice(mi,1);
@@ -5578,9 +5920,10 @@ function saveMenuItem(){
 }
 
 function deleteItem(id){
-  if(!confirm('Remove this item from the menu?'))return;
-  menuItems=menuItems.filter(i=>i.id!==id);
-  saveMenu();renderMenuTable();renderMenu();showToast('Item removed','success');
+  _showConfirm('Remove this item from the menu?', ()=>{
+    menuItems=menuItems.filter(i=>i.id!==id);
+    saveMenu();renderMenuTable();renderMenu();showToast('Item removed','success');
+  }, null, {danger:true, okLabel:'Remove'});
 }
 
 // ===================== SETTINGS =====================
@@ -5590,14 +5933,30 @@ function loadSettings(){
   document.getElementById('settingTips').value=settings.tips.join(',');
   document.getElementById('settingHelcimToken').value=settings.helcimToken||'';
   document.getElementById('settingHelcimTerminal').value=settings.helcimTerminal||'';
+  if(document.getElementById('settingTwilioSid'))document.getElementById('settingTwilioSid').value=settings.twilioSid||'';
+  if(document.getElementById('settingTwilioToken'))document.getElementById('settingTwilioToken').value=settings.twilioToken||'';
+  if(document.getElementById('settingTwilioFrom'))document.getElementById('settingTwilioFrom').value=settings.twilioFrom||'';
+  if(document.getElementById('settingSendgridKey'))document.getElementById('settingSendgridKey').value=settings.sendgridKey||'';
+  if(document.getElementById('settingReceiptFromEmail'))document.getElementById('settingReceiptFromEmail').value=settings.receiptFromEmail||'';
+  if(document.getElementById('settingHelcimCurrency'))document.getElementById('settingHelcimCurrency').value=settings.helcimCurrency||'USD';
+  if(document.getElementById('settingHelcimProxy'))document.getElementById('settingHelcimProxy').value=settings.helcimProxy||'';
+  // Show live vs simulation status
+  const statusNote=document.getElementById('helcimStatusNote');
+  if(statusNote){
+    if(settings.helcimToken&&settings.helcimTerminal){
+      statusNote.innerHTML='✅ <strong style="color:var(--green)">Live mode</strong> — real charges will be processed via Helcim.';
+    } else {
+      statusNote.innerHTML='⚠️ <strong>Simulation mode</strong> — no real charges until API token and terminal ID are saved.';
+      statusNote.style.color='var(--text2)';
+    }
+  }
   if(document.getElementById('settingBarAddress'))document.getElementById('settingBarAddress').value=settings.barAddress||'';
   if(document.getElementById('settingBarPhone'))document.getElementById('settingBarPhone').value=settings.barPhone||'';
   if(document.getElementById('settingGratuityPct'))document.getElementById('settingGratuityPct').value=settings.gratuityPct||0;
   if(document.getElementById('settingGratuityMin'))document.getElementById('settingGratuityMin').value=settings.gratuityMin||50;
   if(document.getElementById('settingLogoutTimeout'))document.getElementById('settingLogoutTimeout').value=settings.logoutTimeout||5;
   const apCB=document.getElementById('settingAutoPrint');
-  const apSlider=document.getElementById('autoPrintSlider');
-  if(apCB){apCB.checked=!!settings.autoPrint;if(apSlider)apSlider.style.background=settings.autoPrint?'var(--green)':'var(--border)';}
+  if(apCB)apCB.checked=!!settings.autoPrint;
   const savedConfig=localStorage.getItem('pos2_firebase_config')||'';
   document.getElementById('settingFirebaseConfig').value=savedConfig;
   updateSettingsSyncBadge();
@@ -5625,10 +5984,50 @@ function loadSettings(){
   if(qrCB){qrCB.checked=!!settings.showReceiptQR;if(qrSlider)qrSlider.style.background=settings.showReceiptQR?'var(--green)':'var(--border)';}
 }
 
+function testHelcimConnection(){
+  const token=document.getElementById('settingHelcimToken').value.trim();
+  const terminal=document.getElementById('settingHelcimTerminal').value.trim();
+  const resultEl=document.getElementById('helcimTestResult');
+  if(!token){resultEl.innerHTML='<span style="color:var(--red)">⚠️ Enter an API token first</span>';return;}
+  if(!terminal||isNaN(parseInt(terminal))){resultEl.innerHTML='<span style="color:var(--red)">⚠️ Enter a valid numeric terminal ID first</span>';return;}
+  resultEl.innerHTML='<span style="color:var(--text2)">Testing connection…</span>';
+  // Use a lightweight read endpoint to verify credentials
+  _helcimFetch('/v2/card-transactions?limit=1',{
+    method:'GET',
+    headers:{'api-token':token,'accept':'application/json'}
+  })
+  .then(r=>{
+    if(r.ok||r.status===200){resultEl.innerHTML='<span style="color:var(--green)">✅ Connected — API token is valid</span>';}
+    else if(r.status===401||r.status===403){resultEl.innerHTML='<span style="color:var(--red)">❌ Invalid API token ('+r.status+')</span>';}
+    else{resultEl.innerHTML='<span style="color:var(--red)">⚠️ Unexpected response: '+r.status+'</span>';}
+  })
+  .catch(err=>{
+    if(err.message&&err.message.toLowerCase().includes('cors')||err.message.toLowerCase().includes('network')){
+      resultEl.innerHTML='<span style="color:var(--red)">❌ CORS/Network error — set up a proxy URL above and try again</span>';
+    } else {
+      resultEl.innerHTML='<span style="color:var(--red)">❌ Connection failed: '+err.message+'</span>';
+    }
+  });
+}
 function saveHelcimSettings(){
   settings.helcimToken=document.getElementById('settingHelcimToken').value.trim();
-  settings.helcimTerminal=document.getElementById('settingHelcimTerminal').value.trim();
+  const termRaw=document.getElementById('settingHelcimTerminal').value.trim();
+  if(termRaw && isNaN(parseInt(termRaw))){showToast('Terminal ID must be a number','error');return;}
+  settings.helcimTerminal=termRaw;
+  settings.helcimCurrency=(document.getElementById('settingHelcimCurrency')?.value||'USD');
+  settings.helcimProxy=(document.getElementById('settingHelcimProxy')?.value.trim().replace(/\/$/,'')||'');
+  settings._localSavedAt=Date.now();
   _safeSettingsSave();
+  if(fbDb&&_netOnline){fbDb.ref('settings').set(settings).catch(()=>{});}
+  // Refresh status note
+  const statusNote=document.getElementById('helcimStatusNote');
+  if(statusNote){
+    if(settings.helcimToken&&settings.helcimTerminal){
+      statusNote.innerHTML='✅ <strong style="color:var(--green)">Live mode</strong> — real charges will be processed via Helcim.';
+    } else {
+      statusNote.innerHTML='⚠️ <strong>Simulation mode</strong> — no real charges until API token and terminal ID are saved.';
+    }
+  }
   showToast('Helcim settings saved','success');
 }
 
@@ -5699,24 +6098,35 @@ function renderModPriceDefaultsList(){
     ).join('')+'</div>';
 }
 function addModPriceDefault(){
-  const name=prompt('Modifier name (e.g. "Double", "Extra Shot"):','');
-  if(!name||!name.trim())return;
-  const nm=name.trim();
-  if(!settings.modifierPriceDefaults)settings.modifierPriceDefaults={};
-  if(settings.modifierPriceDefaults[nm]!==undefined){showToast('Already exists','error');return;}
-  const priceStr=prompt(`Default upcharge price for "${nm}" ($):`, '0.00');
-  if(priceStr===null)return;
-  settings.modifierPriceDefaults[nm]=parseFloat(priceStr)||0;
-  renderModPriceDefaultsList();
-  showToast(`"${nm}" added to modifier upcharges`,'success');
+  _showPrompt('Modifier name (e.g. "Double", "Extra Shot"):', '', name=>{
+    if(!name||!name.trim())return;
+    const nm=name.trim();
+    if(!settings.modifierPriceDefaults)settings.modifierPriceDefaults={};
+    if(settings.modifierPriceDefaults[nm]!==undefined){showToast('Already exists','error');return;}
+    _showPrompt(`Default upcharge price for "${nm}" ($):`, '0.00', priceStr=>{
+      settings.modifierPriceDefaults[nm]=parseFloat(priceStr)||0;
+      renderModPriceDefaultsList();
+      showToast(`"${nm}" added to modifier upcharges`,'success');
+    });
+  });
 }
 function saveShiftNotes(){
   try{_lsSave('pos2_shiftnotes', shiftNotes);}
   catch(e){if(typeof _log==='function')_log('error','Storage','saveShiftNotes failed',e&&e.message||'unknown');}
 }
+function _taxRateLive(val){
+  const n=parseFloat(val);
+  if(!isNaN(n)&&n>=0){
+    settings.taxRate=n;
+    settings._localSavedAt=Date.now();
+    _safeSettingsSave();
+    if(fbDb&&_netOnline){fbDb.ref('settings').set(settings).catch(()=>{});}
+    else if(fbDb){_settingsPendingSync=true;}
+  }
+}
 function saveSettings(){
   settings.barName=document.getElementById('settingBarName').value.trim()||'The Local';
-  settings.taxRate=parseFloat(document.getElementById('settingTax').value)||8;
+  settings.taxRate=parseFloat(document.getElementById('settingTax').value)??8;
   settings.tips=document.getElementById('settingTips').value.split(',').map(s=>parseInt(s)).filter(n=>!isNaN(n)&&n>0);
   if(!settings.tips.length)settings.tips=[15,18,20,25];
   if(document.getElementById('settingBarAddress'))settings.barAddress=document.getElementById('settingBarAddress').value.trim();
@@ -5725,8 +6135,7 @@ function saveSettings(){
   if(document.getElementById('settingGratuityMin'))settings.gratuityMin=parseFloat(document.getElementById('settingGratuityMin').value)||50;
   if(document.getElementById('settingLogoutTimeout')){settings.logoutTimeout=parseFloat(document.getElementById('settingLogoutTimeout').value)||0;startInactivityWatcher();}
   const apCB=document.getElementById('settingAutoPrint');
-  const apSlider=document.getElementById('autoPrintSlider');
-  if(apCB){settings.autoPrint=apCB.checked;if(apSlider)apSlider.style.background=apCB.checked?'var(--green)':'var(--border)';}
+  if(apCB)settings.autoPrint=apCB.checked;
   if(document.getElementById('settingDailyGoal'))settings.dailyGoal=parseFloat(document.getElementById('settingDailyGoal').value)||0;
   if(document.getElementById('settingWeeklyGoal'))settings.weeklyGoal=parseFloat(document.getElementById('settingWeeklyGoal').value)||0;
   // Happy hours — already mutated in-place by inline handlers; just ensure it exists
@@ -5736,8 +6145,12 @@ function saveSettings(){
   if(rfEl)settings.receiptFooter=rfEl.value.trim();
   const qrCB=document.getElementById('settingShowReceiptQR');
   if(qrCB)settings.showReceiptQR=qrCB.checked;
+  settings._localSavedAt = Date.now();
   _safeSettingsSave();
-  if(fbDb){if(_netOnline){fbDb.ref('settings').set(settings).catch(()=>{});}}
+  if(fbDb){
+    if(_netOnline){fbDb.ref('settings').set(settings).catch(()=>{});}
+    else{_settingsPendingSync=true;}
+  }
   document.getElementById('headerBarName').textContent='🍺 '+settings.barName;
   showToast('Settings saved','success');
 }
@@ -5834,6 +6247,7 @@ async function _updateStorageInfo(){
 //   mergeCount  — how many writes were collapsed into this single entry
 
 let _netOnline = navigator.onLine;
+let _settingsPendingSync = false;
 let _offlineQueue = _safeParse('pos2_offline_queue', []);
 
 // ── Drain config ─────────────────────────────────────────────────────────────
@@ -6133,7 +6547,25 @@ function setupFirebaseListeners(){
   });
   fbDb.ref('settings').on('value',snap=>{
     const d=snap.val();
-    if(d!==null){Object.assign(settings,d);_safeSettingsSave();if(currentUser)document.getElementById('headerBarName').textContent='🍺 '+settings.barName;}
+    if(d!==null){
+      // If we have a pending local save, push it and ignore the stale remote data
+      if(_settingsPendingSync && _netOnline){
+        _settingsPendingSync=false;
+        fbDb.ref('settings').set(settings).catch(()=>{});
+      } else {
+        // Only apply remote settings if they are strictly newer than local
+        const remoteTs = d._localSavedAt||0;
+        const localTs  = settings._localSavedAt||0;
+        // Don't overwrite if settings page is open (user may be mid-edit)
+        const settingsPageOpen = document.getElementById('settingsPage') &&
+          document.getElementById('settingsPage').classList.contains('active');
+        if(!settingsPageOpen && remoteTs > localTs){
+          Object.assign(settings,d);
+          _safeSettingsSave();
+        }
+      }
+      if(currentUser)document.getElementById('headerBarName').textContent='🍺 '+settings.barName;
+    }
   });
 }
 
@@ -6696,19 +7128,21 @@ function renderDiscountPresetList(){
 }
 
 function addDiscountPreset(){
-  const name=prompt('Preset name (e.g. Employee, Military, VIP):');
-  if(!name)return;
-  const val=prompt('Discount — enter a % (e.g. 25) or flat $ amount (e.g. $5):');
-  if(!val)return;
-  let pct=0,flat=0;
-  if(val.includes('$')){flat=parseFloat(val.replace('$','').trim())||0;}
-  else{pct=parseFloat(val)||0;}
-  if(pct<=0&&flat<=0){showToast('Invalid discount amount','error');return;}
-  if(!settings.discountPresets)settings.discountPresets=[];
-  settings.discountPresets.push({name:name.trim(),pct,flat});
-  _safeSettingsSave();
-  renderDiscountPresetList();
-  showToast('Preset saved','success');
+  _showPrompt('Preset name (e.g. Employee, Military, VIP):', '', name=>{
+    if(!name||!name.trim())return;
+    _showPrompt('Discount — enter a % (e.g. 25) or flat $ amount (e.g. $5):', '', val=>{
+      if(!val)return;
+      let pct=0,flat=0;
+      if(val.includes('$')){flat=parseFloat(val.replace('$','').trim())||0;}
+      else{pct=parseFloat(val)||0;}
+      if(pct<=0&&flat<=0){showToast('Invalid discount amount','error');return;}
+      if(!settings.discountPresets)settings.discountPresets=[];
+      settings.discountPresets.push({name:name.trim(),pct,flat});
+      _safeSettingsSave();
+      renderDiscountPresetList();
+      showToast('Preset saved','success');
+    });
+  });
 }
 
 function removeDiscountPreset(idx){
@@ -6866,6 +7300,114 @@ function closeModal(id){
   if(id==='checkoutModal'){cancelPayCountdown();closeCustomTipDrawer();closeCashDrawer();_releaseWakeLock();if(checkoutTabId){_unlockTab(checkoutTabId);checkoutTabId=null;}}
 }
 document.querySelectorAll('.modal-overlay').forEach(o=>o.addEventListener('click',e=>{if(e.target===o)o.classList.add('hidden');}));
+
+// ── In-page print (iOS-safe — no window.open popup needed) ───────────────────
+function _printInPage(htmlContent, title){
+  const overlay = document.getElementById('_printOverlay');
+  const content = document.getElementById('_printContent');
+  if(!overlay||!content){
+    // Fallback to popup if overlay missing
+    const w=window.open('','_blank','width=480,height=700');
+    if(w){w.document.write(`<!DOCTYPE html><html><head><title>${title||'Print'}</title></head><body style="margin:0;padding:0;background:#fff;">${htmlContent}</body></html>`);w.document.close();setTimeout(()=>w.print(),300);}
+    return;
+  }
+  content.innerHTML = htmlContent;
+  overlay.style.display = 'block';
+  // Scroll to top before printing
+  overlay.scrollTop = 0;
+  setTimeout(()=>{
+    try{ window.print(); }
+    catch(e){ showToast('Print failed — try using your browser\'s print menu','error'); }
+  }, 250);
+}
+function _closePrintOverlay(){
+  const overlay=document.getElementById('_printOverlay');
+  if(overlay) overlay.style.display='none';
+  document.getElementById('_printContent').innerHTML='';
+}
+// ─────────────────────────────────────────────────────────────────────────────
+
+// ── Inline confirm replacement (confirm() not supported in sandboxed contexts) ────
+let _confirmCallback = null;
+function _showConfirm(message, onConfirm, onCancel, opts={}){
+  let el = document.getElementById('_inlineConfirmModal');
+  if(!el){
+    el = document.createElement('div');
+    el.id = '_inlineConfirmModal';
+    el.style.cssText = 'position:fixed;inset:0;z-index:10000;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,.65)';
+    el.innerHTML = `<div style="background:var(--surface,#1e2330);border-radius:12px;padding:24px 28px;min-width:300px;max-width:88vw;box-shadow:0 8px 32px rgba(0,0,0,.55)">
+      <div id="_confirmMsg" style="color:var(--text,#e8eaf0);font-size:.95rem;line-height:1.55;white-space:pre-line;margin-bottom:20px;"></div>
+      <div style="display:flex;gap:10px;justify-content:flex-end;">
+        <button id="_confirmCancelBtn" style="background:var(--surface2,#252b3b);color:var(--text2,#8892a4);border:1px solid var(--border,#2a2f45);border-radius:8px;padding:8px 20px;cursor:pointer;font-size:.9rem;">Cancel</button>
+        <button id="_confirmOkBtn" style="border:none;border-radius:8px;padding:8px 20px;cursor:pointer;font-size:.9rem;font-weight:600;">Confirm</button>
+      </div>
+    </div>`;
+    document.body.appendChild(el);
+    document.getElementById('_confirmCancelBtn').addEventListener('click', ()=>{
+      el.style.display='none';
+      const cb=_confirmCallback; _confirmCallback=null;
+      if(cb&&cb.cancel) cb.cancel();
+    });
+    document.getElementById('_confirmOkBtn').addEventListener('click', ()=>{
+      el.style.display='none';
+      const cb=_confirmCallback; _confirmCallback=null;
+      if(cb&&cb.ok) cb.ok();
+    });
+    el.addEventListener('keydown', e=>{
+      if(e.key==='Enter'){ document.getElementById('_confirmOkBtn').click(); }
+      if(e.key==='Escape'){ document.getElementById('_confirmCancelBtn').click(); }
+    });
+  }
+  document.getElementById('_confirmMsg').textContent = message;
+  const okBtn = document.getElementById('_confirmOkBtn');
+  const cancelBtn = document.getElementById('_confirmCancelBtn');
+  // Danger style (red OK) vs default (accent)
+  okBtn.style.background = opts.danger ? 'var(--red,#ef4444)' : 'var(--accent,#6c63ff)';
+  okBtn.style.color = '#fff';
+  okBtn.textContent = opts.okLabel || 'Confirm';
+  cancelBtn.textContent = opts.cancelLabel || 'Cancel';
+  _confirmCallback = { ok: onConfirm, cancel: onCancel||null };
+  el.style.display = 'flex';
+  setTimeout(()=> okBtn.focus(), 60);
+}
+// ─────────────────────────────────────────────────────────────────────────────
+
+// ── Inline prompt replacement (prompt() not supported in sandboxed contexts) ─────
+let _promptCallback=null;
+function _showPrompt(label, defaultVal, onConfirm){
+  let el=document.getElementById('_inlinePromptModal');
+  if(!el){
+    el=document.createElement('div');
+    el.id='_inlinePromptModal';
+    el.style.cssText='position:fixed;inset:0;z-index:9999;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,.6)';
+    el.innerHTML=`<div style="background:var(--surface,#1e2330);border-radius:12px;padding:24px 28px;min-width:300px;max-width:90vw;box-shadow:0 8px 32px rgba(0,0,0,.5)">
+      <div id="_promptLabel" style="color:var(--text,#e8eaf0);font-size:.95rem;margin-bottom:12px;white-space:pre-line"></div>
+      <input id="_promptInput" style="width:100%;box-sizing:border-box;background:var(--bg,#12151f);border:1px solid var(--border,#2a2f45);border-radius:8px;color:var(--text,#e8eaf0);font-size:1rem;padding:8px 12px;outline:none" />
+      <div style="display:flex;gap:10px;margin-top:16px;justify-content:flex-end">
+        <button onclick="document.getElementById('_inlinePromptModal').style.display='none';_promptCallback=null" style="background:var(--surface2,#252b3b);color:var(--text2,#8892a4);border:1px solid var(--border,#2a2f45);border-radius:8px;padding:7px 18px;cursor:pointer;font-size:.9rem">Cancel</button>
+        <button id="_promptOkBtn" style="background:var(--accent,#6c63ff);color:#fff;border:none;border-radius:8px;padding:7px 18px;cursor:pointer;font-size:.9rem;font-weight:600">OK</button>
+      </div>
+    </div>`;
+    document.body.appendChild(el);
+    document.getElementById('_promptInput').addEventListener('keydown',e=>{
+      if(e.key==='Enter'){e.preventDefault();document.getElementById('_promptOkBtn').click();}
+      if(e.key==='Escape'){document.getElementById('_inlinePromptModal').style.display='none';_promptCallback=null;}
+    });
+    document.getElementById('_promptOkBtn').addEventListener('click',()=>{
+      const val=document.getElementById('_promptInput').value;
+      el.style.display='none';
+      const cb=_promptCallback;_promptCallback=null;
+      if(cb)cb(val);
+    });
+  }
+  document.getElementById('_promptLabel').textContent=label;
+  const inp=document.getElementById('_promptInput');
+  inp.value=defaultVal||'';
+  _promptCallback=onConfirm;
+  el.style.display='flex';
+  setTimeout(()=>inp.select(),60);
+}
+// ─────────────────────────────────────────────────────────────────────────────
 
 let toastTimer;
 function showToast(msg,type='info'){
@@ -7110,10 +7652,10 @@ function saveTipPoolSession(){
 }
 
 function deleteTipPoolSession(id){
-  if(!confirm('Remove this session from history?'))return;
-  const h=getTipPoolHistory().filter(s=>s.id!==id);
-  saveTipPoolHistory(h);
-  renderTipPool();
+  _showConfirm('Remove this session from history?', ()=>{
+    const h=getTipPoolHistory().filter(s=>s.id!==id);
+    saveTipPoolHistory(h); renderTipPool();
+  }, null, {danger:true, okLabel:'Remove'});
 }
 
 function toggleTipPoolHistory(){
@@ -7329,11 +7871,7 @@ function printTipPool(){
     }
     html+='</table>';
   });
-  const w=window.open('','_blank','width=480,height=600');
-  if(!w){showToast('Allow pop-ups to print','error');return;}
-  w.document.write(`<html><head><title>Tip Pool</title><style>body{font-family:sans-serif;padding:20px;font-size:13px;}table{width:100%;border-collapse:collapse;margin-bottom:16px;}th,td{padding:7px;border-bottom:1px solid #eee;text-align:left;}h2{margin:0 0 4px;}h3{margin:16px 0 6px;}p{margin:0 0 12px;color:#666;font-size:.85em;}</style></head><body>${html}</body></html>`);
-  w.document.close();
-  setTimeout(()=>{try{w.print();}catch(e){}},300);
+  _printInPage(`<div style="font-family:sans-serif;padding:20px;font-size:13px;"><style>table{width:100%;border-collapse:collapse;margin-bottom:16px;}th,td{padding:7px;border-bottom:1px solid #eee;text-align:left;}h2{margin:0 0 4px;}h3{margin:16px 0 6px;}p{margin:0 0 12px;color:#666;font-size:.85em;}</style>${html}</div>`,'Tip Pool');
 }
 
 // ===================== SHIFT NOTES =====================
@@ -7364,25 +7902,116 @@ function addShiftNote(){
 }
 
 // ===================== TEXT / EMAIL RECEIPT =====================
+function saveMessagingSettings(){
+  settings.twilioSid=(document.getElementById('settingTwilioSid')?.value||'').trim();
+  settings.twilioToken=(document.getElementById('settingTwilioToken')?.value||'').trim();
+  settings.twilioFrom=(document.getElementById('settingTwilioFrom')?.value||'').trim();
+  settings.sendgridKey=(document.getElementById('settingSendgridKey')?.value||'').trim();
+  settings.receiptFromEmail=(document.getElementById('settingReceiptFromEmail')?.value||'').trim();
+  settings._localSavedAt=Date.now();
+  _safeSettingsSave();
+  if(fbDb&&_netOnline){fbDb.ref('settings').set(settings).catch(()=>{});}
+  showToast('Messaging settings saved','success');
+}
+
 function openSendReceiptModal(){
   document.getElementById('sendReceiptPhone').value='';
   document.getElementById('sendReceiptEmail').value='';
   document.getElementById('sendReceiptMsg').textContent='';
+  // Show live vs simulation note
+  const noteEl=document.getElementById('sendReceiptServiceNote');
+  if(noteEl){
+    const hasSMS=!!(settings.twilioSid&&settings.twilioToken&&settings.twilioFrom);
+    const hasEmail=!!(settings.sendgridKey&&settings.receiptFromEmail);
+    if(hasSMS&&hasEmail) noteEl.innerHTML='✅ <strong style="color:var(--green)">SMS + Email live</strong> — messages will be sent via Twilio &amp; SendGrid.';
+    else if(hasSMS)       noteEl.innerHTML='✅ <strong style="color:var(--green)">SMS live</strong> · ⚠️ Email not configured (set SendGrid key in Settings).';
+    else if(hasEmail)     noteEl.innerHTML='✅ <strong style="color:var(--green)">Email live</strong> · ⚠️ SMS not configured (set Twilio credentials in Settings).';
+    else                  noteEl.innerHTML='⚠️ <strong>Simulation mode</strong> — no messages sent. Add Twilio/SendGrid credentials in Settings → SMS &amp; Email Receipts.';
+  }
   showModal('sendReceiptModal');
 }
 
-function simulateSendReceipt(){
+function sendReceipt(){
   const phone=document.getElementById('sendReceiptPhone').value.trim();
   const email=document.getElementById('sendReceiptEmail').value.trim();
-  const msg=document.getElementById('sendReceiptMsg');
+  const msgEl=document.getElementById('sendReceiptMsg');
   if(!phone&&!email){showToast('Enter a phone or email address','error');return;}
-  const parts=[];
-  if(phone)parts.push(`SMS to ${phone}`);
-  if(email)parts.push(`email to ${email}`);
-  msg.style.color='var(--green)';
-  msg.textContent=`✅ Receipt sent via ${parts.join(' and ')} (simulated)`;
-  showToast('Receipt sent! (simulation)','success');
-  setTimeout(()=>closeModal('sendReceiptModal'),1800);
+
+  const receiptText=`${settings.barName||'Bar POS'} Receipt\nTX #${String(lastTxId||0).padStart(4,'0')}\nTotal: $${(_lastReceiptSubtotal+_lastReceiptTax+_lastReceiptTip+_lastReceiptAutoGrat).toFixed(2)}\nThank you!`;
+  const receiptHtml=buildReceiptHTML(_lastReceiptItems,_lastReceiptSubtotal,_lastReceiptTax,_lastReceiptTip,false,_lastReceiptAutoGrat);
+
+  const hasSMS=!!(settings.twilioSid&&settings.twilioToken&&settings.twilioFrom);
+  const hasEmail=!!(settings.sendgridKey&&settings.receiptFromEmail);
+  const promises=[];
+
+  if(phone){
+    if(hasSMS){
+      // Twilio Messages API
+      const proxy=(settings.helcimProxy||'').replace(/\/$/,'');
+      const twilioBase=proxy||'https://api.twilio.com';
+      const body=new URLSearchParams({To:phone,From:settings.twilioFrom,Body:receiptText});
+      promises.push(
+        fetch(`${twilioBase}/2010-04-01/Accounts/${settings.twilioSid}/Messages.json`,{
+          method:'POST',
+          headers:{'Authorization':'Basic '+btoa(settings.twilioSid+':'+settings.twilioToken),'Content-Type':'application/x-www-form-urlencoded'},
+          body:body.toString()
+        })
+        .then(r=>r.ok?{ok:true,type:'SMS'}:r.json().then(e=>{throw new Error(e.message||r.status);}))
+        .catch(e=>({ok:false,type:'SMS',error:e.message}))
+      );
+    } else {
+      promises.push(Promise.resolve({ok:false,type:'SMS',error:'Twilio not configured'}));
+    }
+  }
+
+  if(email){
+    if(hasEmail){
+      const proxy=(settings.helcimProxy||'').replace(/\/$/,'');
+      const sgBase=proxy||'https://api.sendgrid.com';
+      promises.push(
+        fetch(`${sgBase}/v3/mail/send`,{
+          method:'POST',
+          headers:{'Authorization':'Bearer '+settings.sendgridKey,'Content-Type':'application/json'},
+          body:JSON.stringify({
+            personalizations:[{to:[{email}]}],
+            from:{email:settings.receiptFromEmail,name:settings.barName||'Bar POS'},
+            subject:`Your receipt from ${settings.barName||'Bar POS'}`,
+            content:[{type:'text/html',value:receiptHtml}]
+          })
+        })
+        .then(r=>r.ok||r.status===202?{ok:true,type:'Email'}:r.json().then(e=>{throw new Error(JSON.stringify(e.errors||e));}))
+        .catch(e=>({ok:false,type:'Email',error:e.message}))
+      );
+    } else {
+      promises.push(Promise.resolve({ok:false,type:'Email',error:'SendGrid not configured'}));
+    }
+  }
+
+  msgEl.textContent='Sending…';
+  const sendBtn=document.querySelector('#sendReceiptModal .modal-footer .btn-blue');
+  if(sendBtn){sendBtn.disabled=true;}
+
+  Promise.all(promises).then(results=>{
+    if(sendBtn){sendBtn.disabled=false;}
+    const successes=results.filter(r=>r.ok).map(r=>r.type);
+    const failures=results.filter(r=>!r.ok);
+    if(successes.length>0){
+      msgEl.style.color='var(--green)';
+      msgEl.textContent='✅ Sent via '+successes.join(' + ');
+      showToast('Receipt sent!','success');
+      setTimeout(()=>closeModal('sendReceiptModal'),1800);
+    }
+    if(failures.length>0){
+      msgEl.style.color='var(--red)';
+      msgEl.textContent='⚠️ '+failures.map(f=>f.type+': '+(f.error||'failed')).join(' · ');
+      if(typeof _log==='function') failures.forEach(f=>_log('error','Receipt Send',f.type+' failed',f.error));
+    }
+    // Simulation fallback if nothing configured
+    if(!hasSMS&&!hasEmail){
+      msgEl.style.color='var(--text2)';
+      msgEl.textContent='⚠️ Simulation — add Twilio/SendGrid credentials in Settings to send real messages.';
+    }
+  });
 }
 
 // ===================== STAFF PAGE =====================
@@ -7464,28 +8093,26 @@ function restoreData(input){
     try{
       const d=JSON.parse(e.target.result);
       if(!d.version||!d.employees){throw new Error('Invalid backup file');}
-      if(!confirm(`Restore backup from ${new Date(d.exportedAt).toLocaleString()}?\n\nThis will REPLACE all current data (menu, employees, transactions). This cannot be undone.`))return;
-      // Apply
-      if(d.settings)Object.assign(settings,d.settings);
-      if(d.employees)employees=d.employees;
-      if(d.menuItems)menuItems=d.menuItems;
-      if(d.tabs)tabs=d.tabs;
-      if(d.transactions)transactions=d.transactions;
-      if(d.dailySpecials)dailySpecials=d.dailySpecials;
-      if(d.shiftNotes)shiftNotes=d.shiftNotes;
-      // Recalculate ID counters
-      nextEmpId=Math.max(...employees.map(e=>e.id),0)+1;
-      nextMenuId=Math.max(...menuItems.map(i=>i.id),0)+1;
-      nextTabId=Math.max(...tabs.map(t=>t.id),0)+1;
-      nextTxId=Math.max(...transactions.map(t=>t.id),0)+1;
-      nextShiftNoteId=Math.max(...shiftNotes.map(n=>n.id),0)+1;
-      // Persist
-      saveEmployees();saveMenu();saveTabs();saveTransactions();saveSpecials();saveShiftNotes();
-      _safeSettingsSave();
-      // Refresh UI
-      if(currentUser)setupForUser();
-      document.getElementById('backupMsg').innerHTML=`<span style="color:var(--green)">✅ Restore complete from ${new Date(d.exportedAt).toLocaleDateString()}</span>`;
-      showToast('Data restored successfully!','success');
+      _showConfirm(`Restore backup from ${new Date(d.exportedAt).toLocaleString()}?\n\nThis will REPLACE all current data (menu, employees, transactions). This cannot be undone.`, ()=>{
+        // Apply
+        if(d.settings)Object.assign(settings,d.settings);
+        if(d.employees)employees=d.employees;
+        if(d.menuItems)menuItems=d.menuItems;
+        if(d.tabs)tabs=d.tabs;
+        if(d.transactions)transactions=d.transactions;
+        if(d.dailySpecials)dailySpecials=d.dailySpecials;
+        if(d.shiftNotes)shiftNotes=d.shiftNotes;
+        nextEmpId=Math.max(...employees.map(e=>e.id),0)+1;
+        nextMenuId=Math.max(...menuItems.map(i=>i.id),0)+1;
+        nextTabId=Math.max(...tabs.map(t=>t.id),0)+1;
+        nextTxId=Math.max(...transactions.map(t=>t.id),0)+1;
+        nextShiftNoteId=Math.max(...shiftNotes.map(n=>n.id),0)+1;
+        saveEmployees();saveMenu();saveTabs();saveTransactions();saveSpecials();saveShiftNotes();
+        _safeSettingsSave();
+        if(currentUser)setupForUser();
+        document.getElementById('backupMsg').innerHTML=`<span style="color:var(--green)">✅ Restore complete from ${new Date(d.exportedAt).toLocaleDateString()}</span>`;
+        showToast('Data restored successfully!','success');
+      }, null, {danger:true, okLabel:'Restore & Replace'});
     }catch(err){
       document.getElementById('backupMsg').innerHTML=`<span style="color:var(--red)">⚠️ Restore failed: ${err.message}</span>`;
       showToast('Restore failed — invalid file','error');
@@ -8430,14 +9057,7 @@ function _validateOrderPrices(){
   if(drifted > 0) showToast(drifted+' item price(s) changed since ordering — original prices kept','warn');
 }
 
-// ── TAB NAME COLLISION WARNING ────────────────────────────────────────────────
-function _checkTabNameCollision(name){
-  const existing = tabs.filter(t=>t.status==='open' && t.name.toLowerCase()===name.toLowerCase());
-  if(existing.length > 0){
-    return confirm('An open tab named "'+name+'" already exists. Create another one anyway?');
-  }
-  return true;
-}
+// ── TAB NAME COLLISION WARNING — inlined into createTab/quickTabConfirm ──────
 
 // ── RECEIPT REPRINT LOG ───────────────────────────────────────────────────────
 const _reprintLog = [];
@@ -9043,8 +9663,8 @@ document.addEventListener('visibilitychange', function(){
       <button onclick="closeCashDrawer()" style="background:var(--surface3);border:1px solid var(--border);border-radius:8px;padding:5px 12px;color:var(--text2);font-size:.8rem;font-weight:700;cursor:pointer;">Done</button>
     </div>
   </div>
-  <div id="cashDrawerQuickBills" style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-bottom:10px;"></div>
-  <div class="tip-numpad" id="cashDrawerNumpad"></div>
+  <div id="cashDrawerQuickBills" style="display:grid;grid-template-columns:repeat(5,1fr);gap:8px;margin-bottom:14px;"></div>
+  <div class="tip-numpad" id="cashDrawerNumpad" style="flex:1;display:grid;grid-template-columns:repeat(3,1fr);gap:10px;"></div>
 </div>
 
 <!-- Custom Tip Numpad Drawer -->
