@@ -2,8 +2,9 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>Bar POS — Helcim</title>
+<script src="https://cdn.jsdelivr.net/npm/lz-string@1.5.0/libs/lz-string.min.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
 <style>
@@ -27,6 +28,8 @@ body{background:var(--bg);color:var(--text);font-family:'Segoe UI',system-ui,san
   .btn{min-height:44px;min-width:44px;}
   .btn-sm{min-height:40px;padding:8px 14px;}
   /* Prevent accidental zooms on double-tap in checkout areas */
+  *{-webkit-tap-highlight-color:transparent;-webkit-touch-callout:none;}
+  button,a,.btn,.tip-btn,.pay-method,.menu-item,.tab-card,.tip-numpad-btn{touch-action:manipulation;}
   #checkoutBody, #splitBody, #orderItems{touch-action:manipulation;}
   /* Larger tap targets on tab close/delete buttons (currently very small) */
   .btn[onclick*="checkoutTab"], .btn[onclick*="deleteTab"]{min-width:48px;min-height:40px;}
@@ -657,6 +660,7 @@ input:checked+.toggle-track::after{left:23px;}
         <span class="shift-tip-pill" id="shiftTipPill" style="display:none;">💰 $0.00</span>
       </div>
       <button class="btn btn-sm btn-ghost" style="color:var(--accent);font-weight:700;" onclick="enterEventMode()" title="Fast-pour event mode">⚡ Event</button>
+      <button class="btn btn-sm btn-ghost" style="color:var(--green);font-weight:700;" onclick="openCloseShift()">⏹ Close Shift</button>
       <button class="btn btn-sm btn-ghost" onclick="logout()">Log Out</button>
     </div>
   </header>
@@ -739,7 +743,10 @@ input:checked+.toggle-track::after{left:23px;}
           </div>
           <div class="order-actions">
             <div class="order-actions-row">
-              <button class="btn btn-md btn-ghost" style="flex:1;font-size:.8rem" onclick="sendToTab()">📋 Add to Tab</button>
+              <button class="btn btn-md btn-accent" style="flex:1;font-size:.8rem" onclick="openNewTabModal()" id="openTabBtn">📋 Open a Tab</button>
+            </div>
+            <div class="order-actions-row">
+              <button class="btn btn-md btn-ghost" style="flex:1;font-size:.8rem" onclick="sendToTab()">➕ Add to Tab</button>
               <button class="btn btn-md btn-green" style="flex:1;font-size:.8rem" onclick="openCheckout()" id="checkoutBtn" disabled>💳 Checkout</button>
             </div>
             <div class="order-actions-row">
@@ -817,6 +824,34 @@ input:checked+.toggle-track::after{left:23px;}
       <div id="salesGoalBar" style="display:none;margin-bottom:12px;"></div>
       <!-- Audit log view -->
       <div id="auditSection" style="display:none;">
+        <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:12px;margin-bottom:12px;display:flex;flex-wrap:wrap;gap:8px;align-items:flex-end;">
+          <div style="flex:1;min-width:130px;">
+            <div style="font-size:.72rem;color:var(--text2);margin-bottom:4px;font-weight:600;">Employee</div>
+            <select id="auditEmpFilter" onchange="renderAuditLog()" style="width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:7px;padding:6px 8px;color:var(--text);font-size:.82rem;">
+              <option value="">All Employees</option>
+            </select>
+          </div>
+          <div style="flex:1;min-width:120px;">
+            <div style="font-size:.72rem;color:var(--text2);margin-bottom:4px;font-weight:600;">Event Type</div>
+            <select id="auditTypeFilter" onchange="renderAuditLog()" style="width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:7px;padding:6px 8px;color:var(--text);font-size:.82rem;">
+              <option value="">All Types</option>
+              <option value="Void">Void</option>
+              <option value="Refund">Refund</option>
+              <option value="Discount">Discount</option>
+              <option value="Comp">Comp</option>
+            </select>
+          </div>
+          <div style="flex:1;min-width:120px;">
+            <div style="font-size:.72rem;color:var(--text2);margin-bottom:4px;font-weight:600;">From</div>
+            <input id="auditDateFrom" type="date" onchange="renderAuditLog()" style="width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:7px;padding:6px 8px;color:var(--text);font-size:.82rem;">
+          </div>
+          <div style="flex:1;min-width:120px;">
+            <div style="font-size:.72rem;color:var(--text2);margin-bottom:4px;font-weight:600;">To</div>
+            <input id="auditDateTo" type="date" onchange="renderAuditLog()" style="width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:7px;padding:6px 8px;color:var(--text);font-size:.82rem;">
+          </div>
+          <button class="btn btn-sm btn-ghost" onclick="clearAuditFilters()" style="flex-shrink:0;">✕ Clear</button>
+        </div>
+        <div style="font-size:.78rem;color:var(--text2);margin-bottom:8px;" id="auditResultCount"></div>
         <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;margin-bottom:16px;">
           <table class="report-table" id="auditTable"></table>
         </div>
@@ -1241,7 +1276,7 @@ input:checked+.toggle-track::after{left:23px;}
   <div class="modal" style="max-width:340px;">
     <div class="modal-header"><div class="modal-title">📋 Open a Tab</div><button class="modal-close" onclick="closeModal('quickTabModal');_pendingQuickItem=null;">✕</button></div>
     <div class="modal-body">
-      <div style="font-size:.82rem;color:var(--text2);margin-bottom:10px;">No tab is open. Give this tab a name to continue, or add the item without a tab.</div>
+      <div style="font-size:.82rem;color:var(--text2);margin-bottom:10px;">Would you like to start a tab for this order? Enter a name below, or tap <strong>Just Add</strong> for a quick cash sale.</div>
       <div class="form-group"><label class="form-label">Tab Name</label><input class="form-input" id="quickTabName" placeholder="e.g. Jake or Table 4" onkeydown="if(event.key==='Enter')quickTabConfirm()"></div>
     </div>
     <div class="modal-footer" style="flex-wrap:wrap;gap:6px;">
@@ -1554,6 +1589,28 @@ input:checked+.toggle-track::after{left:23px;}
 </div>
 
 <!-- SHIFT NOTES -->
+<!-- Close Shift Modal -->
+<div class="modal-overlay hidden" id="closeShiftModal">
+  <div class="modal" style="max-width:480px;">
+    <div class="modal-header">
+      <div class="modal-title">⏹ Close Shift</div>
+      <button class="modal-close" onclick="closeModal('closeShiftModal')">✕</button>
+    </div>
+    <div class="modal-body" id="closeShiftBody"></div>
+  </div>
+</div>
+
+<!-- Post-Payment Tip Modal -->
+<div class="modal-overlay hidden" id="postTipModal">
+  <div class="modal" style="max-width:360px;">
+    <div class="modal-header">
+      <div class="modal-title">💳 Add Tip</div>
+      <button class="modal-close" onclick="closeModal('postTipModal')">✕</button>
+    </div>
+    <div class="modal-body" id="postTipBody"></div>
+  </div>
+</div>
+
 <div class="modal-overlay hidden" id="shiftNotesModal">
   <div class="modal" style="max-width:420px;">
     <div class="modal-header"><div class="modal-title">📝 Shift Notes</div><button class="modal-close" onclick="closeModal('shiftNotesModal')">✕</button></div>
@@ -1704,11 +1761,29 @@ const _POS_SIGNATURE = Object.freeze({
 
 // ===================== STATE =====================
 // ── Safe localStorage parser — falls back to default on corrupt data ──
+// ── LZ-string compressed localStorage helpers ─────────────────────────────
+// _lsSave: compress then store. Falls back to plain JSON if LZString unavailable.
+function _lsSave(key, data){
+  try{
+    const json=JSON.stringify(data);
+    const val=(typeof LZString!=='undefined')?'\x00lz:'+LZString.compressToUTF16(json):json;
+    localStorage.setItem(key, val);
+  }catch(e){
+    if(typeof _log==='function')_log('error','Storage','_lsSave failed for '+key, e&&e.message||'unknown');
+  }
+}
+
+// _safeParse: decompress if needed, fall back to plain JSON (handles old uncompressed data transparently)
 function _safeParse(key, fallback){
   try{
     const raw=localStorage.getItem(key);
     if(raw===null||raw===undefined)return fallback;
-    const parsed=JSON.parse(raw);
+    let json=raw;
+    if(raw.startsWith('\x00lz:')&&typeof LZString!=='undefined'){
+      json=LZString.decompressFromUTF16(raw.slice(4));
+      if(!json)return fallback;
+    }
+    const parsed=JSON.parse(json);
     return (parsed===null||parsed===undefined)?fallback:parsed;
   }catch(e){
     console.warn('[POS] Corrupted localStorage key "'+key+'" — resetting to default.',e);
@@ -1716,9 +1791,9 @@ function _safeParse(key, fallback){
     return fallback;
   }
 }
+
 function _safeSettingsSave(){
-  try{localStorage.setItem('pos2_settings',JSON.stringify(settings));}
-  catch(e){if(typeof _log==='function')_log('error','Storage','Settings save failed',e&&e.message||'unknown');}
+  _lsSave('pos2_settings', settings);
 }
 
 let settings = Object.assign({barName:'The Local',taxRate:8,tips:[15,18,20,25],helcimToken:'',helcimTerminal:'',autoPrint:false,gratuityPct:0,gratuityMin:50,logoutTimeout:5,chime:'ascending',theme:'dark',dailyGoal:0,weeklyGoal:0,discountPresets:[{name:'Employee',pct:50,flat:0},{name:'Industry',pct:25,flat:0},{name:'Military',pct:15,flat:0}],receiptFooter:'Thank you! Drink responsibly 🍺',showReceiptQR:true,happyHours:[{id:1,name:'Happy Hour',startTime:'16:00',endTime:'19:00',days:[1,2,3,4,5],discountPct:20,enabled:true}],dashboardPin:'0000',foodSpecialsEnabled:true,modifierPriceDefaults:{}},
@@ -2234,6 +2309,11 @@ function loginAs(emp){
 function logout(fromInactivity=false){
   currentUser=null;currentOrder=[];activeTabId=null;checkoutTabId=null;_noTabSession=false;
   _discountPct=0;_discountFlat=0;_discountReason='';_skipAutoGrat=false;
+  // FIX: stop the 30s checkpoint timer so it doesn't keep writing stale data after logout
+  if(typeof _orderCheckpointInterval!=='undefined'&&_orderCheckpointInterval){
+    clearInterval(_orderCheckpointInterval);_orderCheckpointInterval=null;
+  }
+  _orderCheckpointClear();
   document.getElementById('appScreen').classList.add('hidden');
   showPage('posPage');
   if(fromInactivity){showIdleScreen();}else{showLoginScreen();}
@@ -2480,7 +2560,7 @@ function togglePin(e,itemId){
     pins.push(itemId);
     showToast('Pinned to favorites ⭐','success');
   }
-  localStorage.setItem('pinnedItems',JSON.stringify(_pinnedItems));
+  _lsSave('pinnedItems', _pinnedItems);
   renderMenu();
 }
 
@@ -2579,6 +2659,14 @@ function deleteSpecial(id){
 
 // ===================== ORDER =====================
 function addToOrder(item){
+  // TAB PROMPT: if a worker taps an item with no active tab open, ask them to start one
+  if(!activeTabId && !_noTabSession && currentUser && currentUser.role === 'worker'){
+    _pendingQuickItem = item;
+    document.getElementById('quickTabName').value = '';
+    showModal('quickTabModal');
+    setTimeout(()=>{ const el=document.getElementById('quickTabName'); if(el)el.focus(); }, 120);
+    return;
+  }
   // MAX TAB SIZE GUARD: warn if tab is getting very large
   if(currentOrder.length >= MAX_TAB_ITEMS){
     showToast('Tab is at '+currentOrder.length+' items — please close this tab before adding more','error');
@@ -2779,17 +2867,15 @@ function clearOrder(){currentOrder=[];_discountPct=0;_discountFlat=0;_discountRe
 // ── ORDER RECOVERY: checkpoint currentOrder to localStorage every 30 seconds ──
 function _orderCheckpointSave(){
   if(!currentOrder||currentOrder.length===0){_orderCheckpointClear();return;}
-  try{
-    localStorage.setItem('pos2_order_checkpoint',JSON.stringify({
-      order:currentOrder,
-      tabId:activeTabId,
-      discountPct:_discountPct,
-      discountFlat:_discountFlat,
-      discountReason:_discountReason,
-      savedAt:new Date().toISOString(),
-      user:currentUser?currentUser.name:null
-    }));
-  }catch(e){}
+  _lsSave('pos2_order_checkpoint',{
+    order:currentOrder,
+    tabId:activeTabId,
+    discountPct:_discountPct,
+    discountFlat:_discountFlat,
+    discountReason:_discountReason,
+    savedAt:new Date().toISOString(),
+    user:currentUser?currentUser.name:null
+  });
 }
 function _orderCheckpointClear(){
   try{localStorage.removeItem('pos2_order_checkpoint');}catch(e){}
@@ -2823,16 +2909,17 @@ function _startOrderCheckpoint(){
 }
 
 // ===================== REORDER =====================
-function reorderItem(itemIdx, txIdx){
-  const tx=transactions[txIdx];
+// FIX: use transaction ID (not array index) so stale indices never hit the wrong TX
+function reorderItem(itemIdx, txId){
+  const tx=transactions.find(t=>t.id===txId);
   if(!tx||!tx.items[itemIdx])return;
   const src=tx.items[itemIdx];
   // Find menu item to get full current price; fall back to snapshot
   const live=menuItems.find(m=>m.id===src.id)||src;
   addToOrder({...live, qty:src.qty});
 }
-function reorderAllItems(txIdx){
-  const tx=transactions[txIdx];
+function reorderAllItems(txId){
+  const tx=transactions.find(t=>t.id===txId);
   if(!tx||!tx.items)return;
   tx.items.forEach(src=>{
     const live=menuItems.find(m=>m.id===src.id)||src;
@@ -2911,14 +2998,14 @@ function renderOrder(){
           <div class="last-round-item">
             <span style="font-size:1rem">${it.emoji||'🍹'}</span>
             <span class="last-round-item-name">${it.name}${it.qty>1?' x'+it.qty:''}</span>
-            <button class="last-round-reorder-btn" onclick="reorderItem(${i},${transactions.indexOf(last)})">↩ Add</button>
+            <button class="last-round-reorder-btn" onclick="reorderItem(${i},${last.id})">↩ Add</button>
           </div>`).join('');
         const ts=new Date(last.timestamp);
         const timeStr=ts.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'});
         lastRoundHtml=`<div class="last-round">
           <div class="last-round-header"><span>↩ Last Round (${timeStr})</span></div>
           ${itemsHtml}
-          <button class="last-round-all-btn" onclick="reorderAllItems(${transactions.indexOf(last)})">↩ Reorder Entire Last Round</button>
+          <button class="last-round-all-btn" onclick="reorderAllItems(${last.id})">↩ Reorder Entire Last Round</button>
         </div>`;
       }
     }
@@ -2927,12 +3014,17 @@ function renderOrder(){
     document.getElementById('checkoutBtn').disabled=true;
     document.getElementById('splitBtn').disabled=true;
     if(discBtn)discBtn.disabled=true;
+    // Show "Open a Tab" when no tab is active; hide it once a tab is open
+    const openTabBtn=document.getElementById('openTabBtn');
+    if(openTabBtn)openTabBtn.closest('.order-actions-row').style.display=activeTabId?'none':'';
   } else {
     const qty=currentOrder.reduce((s,i)=>s+i.qty,0);
     badge.textContent=qty;badge.style.display='';
     document.getElementById('checkoutBtn').disabled=false;
     document.getElementById('splitBtn').disabled=false;
     if(discBtn)discBtn.disabled=false;
+    const openTabBtn=document.getElementById('openTabBtn');
+    if(openTabBtn)openTabBtn.closest('.order-actions-row').style.display=activeTabId?'none':'';
     container.innerHTML='';
     currentOrder.forEach((item,idx)=>{
       const row=document.createElement('div');
@@ -3243,7 +3335,8 @@ function assignSeat(lineIdx,seatNum){
 }
 
 function getSplitTotal(){
-  const subtotal=splitOrderSnapshot.reduce((s,i)=>s+(i.price+(i.modTotal||0))*i.qty,0);
+  // FIX: exclude comped items from the split total (same as getOrderTotal)
+  const subtotal=splitOrderSnapshot.reduce((s,i)=>s+(i.comped?0:(i.price+(i.modTotal||0))*i.qty),0);
   const tax=subtotal*(settings.taxRate/100);
   const tip=subtotal*(splitTipPct/100);
   const grandTotal=subtotal+tax+tip;
@@ -3489,10 +3582,20 @@ function updateShiftTips(){
 
 // ===================== VOID TRANSACTION =====================
 function voidTransaction(id){
-  if(!confirm('Void this transaction? It will remain in history but be excluded from totals.'))return;
   const tx=transactions.find(t=>t.id===id);
   if(!tx)return;
+  // FIX: workers can only void their own transactions; managers/owners can void any
+  const role=currentUser?currentUser.role:'';
+  if(role==='worker'&&tx.employeeId!==currentUser.id){
+    showToast('Workers can only void their own transactions','error');
+    if(typeof _log==='function') _log('warn','Security','Worker tried to void another employee\'s transaction','TX ID: '+id);
+    return;
+  }
+  if(!confirm('Void this transaction? It will remain in history but be excluded from totals.'))return;
   tx.voided=true;
+  tx.voidedBy=currentUser?currentUser.name:'Unknown';
+  tx.voidedById=currentUser?currentUser.id:null;
+  tx.voidedAt=new Date().toISOString();
   saveTransactions();renderReports();
   showToast('Transaction voided','success');
 }
@@ -3722,9 +3825,14 @@ function renderEOD(){
   const reportTitle=_eodView==='bar'?'Bar Report':_eodView==='kitchen'?'Kitchen Report':'Full Report';
   const tipsLabel=_eodView==='bar'?'Bar Tips':_eodView==='kitchen'?'Kitchen Tips':'Total Tips';
 
+  if(_eodView==='cash'){
+    renderCashReconciliation(allTodayActive, refundTx);
+    return;
+  }
+
   document.getElementById('eodBody').innerHTML=`
     <div style="display:flex;gap:6px;margin-bottom:14px;">
-      ${tabBtn('all','All','📊')}${tabBtn('bar','Bar','🍺')}${tabBtn('kitchen','Kitchen','🍳')}
+      ${tabBtn('all','All','📊')}${tabBtn('bar','Bar','🍺')}${tabBtn('kitchen','Kitchen','🍳')}${tabBtn('cash','Cash','💵')}
     </div>
     <div style="text-align:center;margin-bottom:14px;">
       <div style="font-size:1rem;font-weight:700;">${settings.barName} — ${reportTitle}</div>
@@ -3752,6 +3860,133 @@ function renderEOD(){
     <div class="eod-row"><span>Comps</span><span style="color:var(--text2);font-size:.8rem">${todayTx.filter(t=>t.compTotal>0).length} orders</span><span style="color:var(--purple);font-weight:700">-$${totalComps.toFixed(2)}</span></div>`:''}
     <div style="text-align:center;margin-top:14px;font-size:.72rem;color:var(--text2);">Generated ${now.toLocaleTimeString()} - ${settings.barName}</div>`;
 }
+
+// ===================== CASH RECONCILIATION =====================
+let _cashRecon = _safeParse('pos2_cash_recon_today', {float:0, denominations:{100:0,50:0,20:0,10:0,5:0,1:0,0.25:0,0.10:0,0.05:0,0.01:0}, saved:false, savedAt:null, note:''});
+
+function renderCashReconciliation(activeTx, refundTx){
+  const cashSales  = activeTx.filter(t=>t.method==='Cash').reduce((s,t)=>s+(t.total||0),0);
+  const cashRefunds= refundTx.filter(t=>t.refundMethod==='Cash'||t.method==='Cash').reduce((s,t)=>s+Math.abs(t.total||0),0);
+  const expectedInDrawer = _currencyRound((_cashRecon.float||0) + cashSales - cashRefunds);
+  const denoms = [100,50,20,10,5,1,0.25,0.10,0.05,0.01];
+  const denomLabels = {'100':'$100','50':'$50','20':'$20','10':'$10','5':'$5','1':'$1','0.25':'25¢','0.10':'10¢','0.05':'5¢','0.01':'1¢'};
+  const countedCash = _currencyRound(denoms.reduce((s,d)=>s+d*(_cashRecon.denominations[d]||0),0));
+  const diff = _currencyRound(countedCash - expectedInDrawer);
+  const diffColor = diff===0?'var(--green)':diff>0?'var(--accent)':'var(--red)';
+  const diffLabel = diff===0?'✅ Balanced':diff>0?`+$${diff.toFixed(2)} Over`:`-$${Math.abs(diff).toFixed(2)} Short`;
+
+  const tabBtn=(v,lbl,icon)=>`<button onclick="setEodView('${v}')" style="flex:1;padding:7px 4px;border:none;border-radius:7px;cursor:pointer;font-size:.8rem;font-weight:700;background:${_eodView===v?'var(--accent)':'var(--surface2)'};color:${_eodView===v?'#000':'var(--text)'};">${icon} ${lbl}</button>`;
+
+  document.getElementById('eodBody').innerHTML=`
+    <div style="display:flex;gap:6px;margin-bottom:14px;">
+      ${tabBtn('all','All','📊')}${tabBtn('bar','Bar','🍺')}${tabBtn('kitchen','Kitchen','🍳')}${tabBtn('cash','Cash','💵')}
+    </div>
+    <div style="font-weight:800;font-size:1rem;text-align:center;margin-bottom:14px;">💵 Cash Drawer Reconciliation</div>
+
+    <!-- Opening Float -->
+    <div class="eod-section">Opening Float</div>
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px;">
+      <span style="font-size:.85rem;color:var(--text2);white-space:nowrap;">Starting Cash:</span>
+      <div style="display:flex;align-items:center;background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:6px 10px;flex:1;">
+        <span style="color:var(--accent);font-weight:700;margin-right:4px;">$</span>
+        <input type="number" inputmode="decimal" step="0.01" min="0" id="cashFloat"
+          value="${(_cashRecon.float||0).toFixed(2)}"
+          oninput="updateCashRecon()"
+          style="background:transparent;border:none;outline:none;color:var(--text);font-size:1rem;font-weight:700;width:100%;">
+      </div>
+    </div>
+
+    <!-- Cash Activity Summary -->
+    <div class="eod-section">Today's Cash Activity</div>
+    <div class="eod-row"><span>Opening Float</span><span style="font-weight:700;color:var(--text)">$${(_cashRecon.float||0).toFixed(2)}</span></div>
+    <div class="eod-row"><span>Cash Sales</span><span style="font-weight:700;color:var(--green)">+$${cashSales.toFixed(2)}</span></div>
+    <div class="eod-row"><span>Cash Refunds</span><span style="font-weight:700;color:var(--red)">-$${cashRefunds.toFixed(2)}</span></div>
+    <div class="eod-row" style="font-weight:800;"><span>Expected in Drawer</span><span style="color:var(--accent)">$${expectedInDrawer.toFixed(2)}</span></div>
+
+    <!-- Denomination Count -->
+    <div class="eod-section">Count Your Drawer</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:14px;">
+      ${denoms.map(d=>`
+        <div style="background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:8px 10px;display:flex;align-items:center;justify-content:space-between;gap:8px;">
+          <span style="font-size:.85rem;font-weight:700;color:var(--text2);white-space:nowrap;">${denomLabels[d]}</span>
+          <input type="number" inputmode="numeric" min="0" step="1" id="denom_${String(d).replace('.','_')}"
+            value="${_cashRecon.denominations[d]||0}"
+            oninput="updateCashRecon()"
+            style="width:52px;background:var(--surface3);border:1px solid var(--border);border-radius:6px;padding:4px 6px;color:var(--text);font-size:.9rem;font-weight:700;text-align:center;outline:none;">
+          <span style="font-size:.75rem;color:var(--text2);min-width:42px;text-align:right;">=$${_currencyRound(d*(_cashRecon.denominations[d]||0)).toFixed(2)}</span>
+        </div>`).join('')}
+    </div>
+
+    <!-- Result -->
+    <div style="background:var(--surface2);border:2px solid ${diffColor};border-radius:12px;padding:16px;text-align:center;margin-bottom:14px;">
+      <div style="font-size:.75rem;color:var(--text2);margin-bottom:4px;">Counted Total</div>
+      <div style="font-size:2rem;font-weight:900;color:var(--text);">$${countedCash.toFixed(2)}</div>
+      <div style="font-size:.75rem;color:var(--text2);margin:8px 0 4px;">vs Expected $${expectedInDrawer.toFixed(2)}</div>
+      <div style="font-size:1.3rem;font-weight:800;color:${diffColor};">${diffLabel}</div>
+    </div>
+
+    <!-- Notes -->
+    <textarea id="cashReconNote" placeholder="Notes (e.g. reason for discrepancy)..."
+      oninput="_cashRecon.note=this.value"
+      style="width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:8px 10px;color:var(--text);font-size:.82rem;resize:vertical;min-height:52px;outline:none;box-sizing:border-box;margin-bottom:12px;">${_cashRecon.note||''}</textarea>
+
+    <div style="display:flex;gap:8px;">
+      <button class="btn btn-md btn-green" style="flex:1;" onclick="saveCashRecon()">💾 Save Reconciliation</button>
+      <button class="btn btn-md btn-blue" style="flex:1;" onclick="printCashRecon()">🖨 Print</button>
+    </div>
+    ${_cashRecon.savedAt?`<div style="font-size:.72rem;color:var(--green);text-align:center;margin-top:8px;">✅ Last saved ${new Date(_cashRecon.savedAt).toLocaleTimeString()} by ${_cashRecon.savedBy||'—'}</div>`:''}`;
+}
+
+function updateCashRecon(){
+  const floatEl=document.getElementById('cashFloat');
+  if(floatEl)_cashRecon.float=parseFloat(floatEl.value)||0;
+  const denoms=[100,50,20,10,5,1,0.25,0.10,0.05,0.01];
+  denoms.forEach(d=>{
+    const el=document.getElementById('denom_'+String(d).replace('.','_'));
+    if(el)_cashRecon.denominations[d]=parseInt(el.value)||0;
+  });
+  _lsSave('pos2_cash_recon_today',_cashRecon);
+  renderCashReconciliation(
+    transactions.filter(t=>new Date(t.timestamp).toDateString()===new Date().toDateString()&&!t.voided&&!t.isRefund),
+    transactions.filter(t=>new Date(t.timestamp).toDateString()===new Date().toDateString()&&t.isRefund)
+  );
+}
+
+function saveCashRecon(){
+  const noteEl=document.getElementById('cashReconNote');
+  if(noteEl)_cashRecon.note=noteEl.value;
+  _cashRecon.saved=true;
+  _cashRecon.savedAt=new Date().toISOString();
+  _cashRecon.savedBy=currentUser?currentUser.name:'';
+  _lsSave('pos2_cash_recon_today',_cashRecon);
+  showToast('Cash reconciliation saved','success');
+  renderEOD();
+}
+
+function printCashRecon(){
+  const el=document.getElementById('eodBody');
+  if(!el)return;
+  const clone=el.cloneNode(true);
+  clone.querySelectorAll('button,input,textarea').forEach(n=>n.remove());
+  const w=window.open('','_blank','width=480,height=700');
+  w.document.write(`<html><head><title>Cash Reconciliation — ${settings.barName}</title><style>
+    body{font-family:'Segoe UI',sans-serif;padding:20px;max-width:420px;font-size:13px;}
+    .eod-row{display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px solid #eee;}
+    .eod-section{font-weight:700;font-size:.75rem;text-transform:uppercase;color:#888;margin:10px 0 5px;}
+  </style></head><body>${clone.innerHTML}</body></html>`);
+  w.document.close();w.print();
+}
+
+// Reset reconciliation each new day
+(function(){
+  const today=new Date().toDateString();
+  const saved=_cashRecon._date;
+  if(saved&&saved!==today){
+    _cashRecon={float:0,denominations:{100:0,50:0,20:0,10:0,5:0,1:0,0.25:0,0.10:0,0.05:0,0.01:0},saved:false,savedAt:null,note:''};
+    _lsSave('pos2_cash_recon_today',_cashRecon);
+  }
+  _cashRecon._date=today;
+})();
 
 function printEOD(){
   const viewLabel=_eodView==='bar'?'Bar Report':_eodView==='kitchen'?'Kitchen Report':'Full Report';
@@ -3823,6 +4058,9 @@ function openCheckout(tabIdArg=null){
   _validateOrderPrices(); // PRICE DRIFT: check for changed prices since items were added
   if(currentOrder.length===0){showToast('No items to checkout','error');return;}
   checkoutTabId=tabIdArg;selectedTip=18;selectedPayMethod='tap';_skipAutoGrat=false;_customTipActive=false;_customTipRaw='';_cashGivenRaw='';cancelPayCountdown();
+  // FIX: reset any discount from a prior checkout session so it doesn't bleed to a different tab
+  _discountPct=0;_discountFlat=0;_discountReason='';
+  _acquireWakeLock();
   renderCheckoutBody();showModal('checkoutModal');
 }
 
@@ -4126,7 +4364,41 @@ function updateChange(total){
   if(processBtn)processBtn.disabled=change<0;
 }
 
+let _payLockSafetyTimer = null;
+function _showPayLock(msg='Processing payment…'){
+  const el=document.getElementById('payLockOverlay');
+  if(!el)return;
+  document.getElementById('payLockMsg').textContent=msg;
+  el.style.display='flex';
+  // Safety net: auto-release after 30s so a hung payment can never permanently
+  // lock the screen. The tab lock is also released so the bartender can retry.
+  if(_payLockSafetyTimer) clearTimeout(_payLockSafetyTimer);
+  _payLockSafetyTimer = setTimeout(()=>{
+    if(document.getElementById('payLockOverlay').style.display!=='none'){
+      _hidePayLock();
+      if(typeof checkoutTabId!=='undefined'&&checkoutTabId) _unlockTab(checkoutTabId);
+      showToast('Payment timed out — please check transactions and retry','error');
+      if(typeof _log==='function') _log('error','PayLock','Safety timeout fired — overlay force-released after 30s',null);
+    }
+  }, 30000);
+}
+function _hidePayLock(){
+  const el=document.getElementById('payLockOverlay');
+  if(el)el.style.display='none';
+  if(_payLockSafetyTimer){ clearTimeout(_payLockSafetyTimer); _payLockSafetyTimer=null; }
+}
 function processPayment(){
+  try{ _processPaymentInner(); }
+  catch(err){
+    _hidePayLock();
+    if(checkoutTabId)_unlockTab(checkoutTabId);
+    cancelPayCountdown();
+    showToast('Payment error — tab unlocked. Please try again.','error');
+    if(typeof _log==='function')_log('error','processPayment','Uncaught exception in payment flow',err&&err.message||String(err));
+    console.error('[POS] processPayment error:',err);
+  }
+}
+function _processPaymentInner(){
   // RACE CONDITION GUARD: block if tab already closed by another device
   if(checkoutTabId){
     const existingTab=tabs.find(tb=>tb.id===checkoutTabId);
@@ -4174,6 +4446,8 @@ function processPayment(){
   const compedItems=currentOrder.filter(i=>i.comped);
   const compTotal=_currencyRound(compedItems.reduce((s,i)=>s+i.price*i.qty,0));
 
+  _showPayLock(isCash?'Recording payment…':'Processing payment…');
+
   const recordAndShow=()=>{
     // DUPLICATE TRANSACTION GUARD: block same amount on same tab within 60 seconds
     const _now60=Date.now()-60000;
@@ -4185,7 +4459,7 @@ function processPayment(){
     if(_dupCheck){
       const _secsAgo=Math.round((Date.now()-new Date(_dupCheck.timestamp).getTime())/1000);
       if(!confirm('\u26a0\ufe0f A $'+finalTotal.toFixed(2)+' transaction on this tab was just processed '+_secsAgo+'s ago. Process again?')){
-        _unlockTab(checkoutTabId);
+        _hidePayLock();_unlockTab(checkoutTabId);
         closeModal('checkoutModal');
         if(typeof _log==='function') _log('warn','Duplicate TX','Duplicate charge blocked','Tab: '+checkoutTabId+' $'+finalTotal.toFixed(2));
         return;
@@ -4206,6 +4480,7 @@ function processPayment(){
     lastTxId=tx.id; lastTxTimestamp=txTimestamp;
     transactions.push(tx);saveTransactions();
     if(checkoutTabId){const tab=tabs.find(tb=>tb.id===checkoutTabId);if(tab){tab.status='closed';tab.closedAt=new Date().toISOString();}saveTabs();_unlockTab(checkoutTabId);}
+    _hidePayLock();
     document.getElementById('checkoutBody').innerHTML=`
       <div class="payment-success">
         <div class="success-icon">${isCash?'💵':'✅'}</div>
@@ -4221,7 +4496,9 @@ function processPayment(){
         </div>`:`<div style="font-size:1.1rem;font-weight:700;color:var(--green)">Payment Approved!</div><div style="font-size:1.5rem;font-weight:700;color:var(--accent)">$${finalTotal.toFixed(2)}</div>`}
 
         <div style="font-size:.78rem;color:var(--text2);margin-top:6px">${method} · ${new Date().toLocaleTimeString()} · ${currentUser.name}</div>
-        <button class="btn btn-lg btn-blue" style="width:100%;margin-top:12px;font-size:1rem;" onclick="finishPayment(true)">🖨 Print Receipt</button>
+        <div style="font-size:.82rem;font-weight:700;color:var(--accent);margin-top:4px;letter-spacing:.04em;">TX #${String(tx.id).padStart(4,'0')}</div>
+        ${!isCash?`<button class="btn btn-md btn-accent" style="width:100%;margin-top:12px;font-weight:700;" onclick="openPostTipModal(${tx.id})">💰 Add / Adjust Tip</button>`:''}
+        <button class="btn btn-lg btn-blue" style="width:100%;margin-top:8px;font-size:1rem;" onclick="finishPayment(true)">🖨 Print Receipt</button>
         <button class="btn btn-md btn-ghost" style="width:100%;margin-top:6px;" onclick="finishPayment(false)">Skip — Done</button>
       </div>`;
   };
@@ -4240,6 +4517,131 @@ function processPayment(){
       </div>`;
     setTimeout(recordAndShow,2000);
   }
+} // end _processPaymentInner
+
+// ===================== POST-PAYMENT TIP =====================
+function openPostTipModal(txId){
+  const tx=transactions.find(t=>t.id===txId);
+  if(!tx)return;
+  let _ptRaw=tx.tip>0?tx.tip.toFixed(2):'';
+  const render=()=>{
+    const n=parseFloat(_ptRaw)||0;
+    const change=n-tx.tip;
+    document.getElementById('postTipBody').innerHTML=`
+      <div style="text-align:center;margin-bottom:14px;">
+        <div style="font-size:.75rem;color:var(--text2);margin-bottom:2px;">Current Tip</div>
+        <div style="font-size:1.4rem;font-weight:700;color:var(--text2);">$${tx.tip.toFixed(2)}</div>
+      </div>
+      <div style="background:var(--surface2);border-radius:12px;padding:14px;margin-bottom:12px;">
+        <div style="font-size:.72rem;color:var(--accent);font-weight:700;text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px;text-align:center;">New Tip Amount</div>
+        <div style="font-size:2.8rem;font-weight:900;color:var(--text);text-align:center;margin-bottom:12px;">${_ptRaw?'$'+n.toFixed(2):'$0.00'}</div>
+        <div class="tip-numpad">
+          ${['1','2','3','4','5','6','7','8','9','⌫','0','.'].map(k=>`<div class="tip-numpad-btn${k==='⌫'?' backspace':''}" onclick="ptNumpad('${k}',${txId})">${k}</div>`).join('')}
+        </div>
+      </div>
+      ${change!==0?`<div style="text-align:center;font-size:.82rem;color:${change>0?'var(--green)':'var(--red)'};margin-bottom:10px;font-weight:700;">${change>0?'+ Adding':'− Removing'} $${Math.abs(change).toFixed(2)}</div>`:''}
+      <button class="btn btn-lg btn-green" style="width:100%;" onclick="applyPostTip(${txId},${n})">✅ Apply Tip — $${n.toFixed(2)}</button>
+      <button class="btn btn-md btn-ghost" style="width:100%;margin-top:6px;" onclick="closeModal('postTipModal')">Cancel</button>`;
+  };
+  window._ptRaw=_ptRaw;
+  window._ptTxId=txId;
+  window._ptRender=render;
+  showModal('postTipModal');
+  render();
+}
+function ptNumpad(key,txId){
+  let raw=window._ptRaw||'';
+  if(key==='⌫'){raw=raw.slice(0,-1);}
+  else if(key==='.'){if(!raw.includes('.'))raw+=raw===''?'0.':'.';}
+  else{const parts=raw.split('.');if(parts.length>1&&parts[1].length>=2){}else raw+=key;}
+  window._ptRaw=raw;
+  window._ptRender&&window._ptRender();
+}
+function applyPostTip(txId,newTip){
+  const tx=transactions.find(t=>t.id===txId);
+  if(!tx){showToast('Transaction not found','error');return;}
+  const oldTip=tx.tip||0;
+  const diff=_currencyRound(newTip-oldTip);
+  tx.tip=_currencyRound(newTip);
+  tx.total=_currencyRound(tx.total+diff);
+  tx.tipAdjustedBy=currentUser?currentUser.name:'';
+  tx.tipAdjustedAt=new Date().toISOString();
+  saveTransactions();
+  closeModal('postTipModal');
+  showToast(`Tip updated to $${newTip.toFixed(2)}`,'success');
+  updateShiftTips();
+}
+
+// ===================== CLOSE SHIFT =====================
+function openCloseShift(){
+  if(!currentUser){showToast('No active session','error');return;}
+  const loginTime=currentUser.loginTime?new Date(currentUser.loginTime):new Date(0);
+  const now=new Date();
+  const shiftTx=transactions.filter(tx=>new Date(tx.timestamp)>=loginTime&&tx.employeeId===currentUser.id&&!tx.isRefund);
+  const sales=shiftTx.filter(tx=>!tx.voided).reduce((s,tx)=>s+tx.total,0);
+  const tips=shiftTx.filter(tx=>!tx.voided).reduce((s,tx)=>s+(tx.tip||0)+(tx.autoGrat||0),0);
+  const comps=shiftTx.filter(tx=>!tx.voided).reduce((s,tx)=>s+(tx.compTotal||0),0);
+  const voids=shiftTx.filter(tx=>tx.voided).length;
+  const txCount=shiftTx.filter(tx=>!tx.voided).length;
+  const discounts=shiftTx.filter(tx=>!tx.voided&&tx.discountReason).reduce((s,tx)=>s+(tx.discountAmt||0),0);
+  const duration=Math.round((now-loginTime)/60000);
+  const hrs=Math.floor(duration/60), mins=duration%60;
+  const durationStr=hrs>0?`${hrs}h ${mins}m`:`${mins}m`;
+  const startStr=loginTime.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})+' '+loginTime.toLocaleDateString([],{month:'short',day:'numeric'});
+
+  document.getElementById('closeShiftBody').innerHTML=`
+    <div id="shiftSummaryPrint">
+      <div style="text-align:center;margin-bottom:16px;">
+        <div style="font-size:1.1rem;font-weight:800;">${currentUser.emoji} ${currentUser.name}</div>
+        <div style="font-size:.8rem;color:var(--text2);">Shift started ${startStr} · Duration ${durationStr}</div>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:16px;">
+        ${[['💰 Total Sales','$'+sales.toFixed(2),'var(--accent)'],['🏦 Tips Earned','$'+tips.toFixed(2),'var(--green)'],
+           ['🎁 Comps Given','$'+comps.toFixed(2),'var(--purple)'],['🏷 Discounts','$'+discounts.toFixed(2),'var(--blue)'],
+           ['🧾 Transactions',txCount,'var(--text)'],['🚫 Voids',voids,voids>0?'var(--red)':'var(--text2)']
+          ].map(([label,val,color])=>`<div style="background:var(--surface2);border-radius:10px;padding:12px;text-align:center;">
+            <div style="font-size:.72rem;color:var(--text2);margin-bottom:4px;">${label}</div>
+            <div style="font-size:1.3rem;font-weight:800;color:${color};">${val}</div>
+          </div>`).join('')}
+      </div>
+      <div style="background:var(--surface2);border-radius:8px;padding:10px 12px;margin-bottom:16px;">
+        <div style="font-size:.72rem;color:var(--text2);font-weight:600;text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px;">Transactions This Shift</div>
+        ${shiftTx.filter(tx=>!tx.voided).slice(-10).reverse().map(tx=>`
+          <div style="display:flex;justify-content:space-between;font-size:.78rem;padding:3px 0;border-bottom:1px solid var(--border);">
+            <span style="color:var(--text2)">${new Date(tx.timestamp).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})}</span>
+            <span>${tx.tabName||'Quick Sale'}</span>
+            <span style="font-weight:700;color:var(--accent)">$${tx.total.toFixed(2)}</span>
+          </div>`).join('')||'<div style="color:var(--text2);font-size:.78rem;">No transactions this shift</div>'}
+      </div>
+    </div>
+    <div style="display:flex;gap:8px;">
+      <button class="btn btn-md btn-blue" style="flex:1;" onclick="printShiftSummary()">🖨 Print Summary</button>
+      <button class="btn btn-md btn-ghost" style="flex:1;" onclick="exportShiftCSV()">📥 Export CSV</button>
+    </div>
+    <button class="btn btn-lg btn-green" style="width:100%;margin-top:8px;font-weight:700;" onclick="closeModal('closeShiftModal');logout()">✅ Close Shift & Log Out</button>
+    <button class="btn btn-md btn-ghost" style="width:100%;margin-top:6px;" onclick="closeModal('closeShiftModal')">Cancel — Keep Working</button>`;
+  showModal('closeShiftModal');
+}
+function printShiftSummary(){
+  const el=document.getElementById('shiftSummaryPrint');
+  if(!el)return;
+  const w=window.open('','_blank','width=400,height=600');
+  w.document.write(`<html><head><title>Shift Summary</title><style>body{font-family:Arial,sans-serif;padding:20px;font-size:13px;}h2{text-align:center;}table{width:100%;border-collapse:collapse;}td,th{padding:6px;border-bottom:1px solid #ddd;}</style></head><body>${el.innerHTML}</body></html>`);
+  w.document.close();w.print();
+}
+function exportShiftCSV(){
+  if(!currentUser)return;
+  const loginTime=currentUser.loginTime?new Date(currentUser.loginTime):new Date(0);
+  const shiftTx=transactions.filter(tx=>new Date(tx.timestamp)>=loginTime&&tx.employeeId===currentUser.id&&!tx.isRefund&&!tx.voided);
+  const rows=[['Time','Tab','Total','Tip','Method','Discount']];
+  shiftTx.forEach(tx=>{
+    rows.push([new Date(tx.timestamp).toLocaleString(),tx.tabName||'Quick Sale',tx.total.toFixed(2),(tx.tip||0).toFixed(2),tx.method||'',tx.discountReason||'']);
+  });
+  const csv=rows.map(r=>r.map(v=>'"'+String(v).replace(/"/g,'""')+'"').join(',')).join('\n');
+  const a=document.createElement('a');
+  a.href='data:text/csv;charset=utf-8,'+encodeURIComponent(csv);
+  a.download=`shift-${currentUser.name.replace(/\s+/g,'_')}-${new Date().toISOString().slice(0,10)}.csv`;
+  a.click();
 }
 
 function finishPayment(doShowReceipt){
@@ -5233,8 +5635,7 @@ function saveHelcimSettings(){
 function toFbObj(arr){const o={};arr.forEach(i=>o[i.id]=i);return o;}
 
 function saveEmployees(){
-  try{localStorage.setItem('pos2_employees',JSON.stringify(employees));}
-  catch(e){if(typeof _log==='function')_log('error','Storage','saveEmployees failed',e&&e.message||'unknown');}
+  _lsSave('pos2_employees', employees);
   if(fbDb){
     if(_netOnline){fbDb.ref('employees').set(toFbObj(employees)).catch(()=>{_enqueueOffline('employees');});}
     else{_enqueueOffline('employees');}
@@ -5242,7 +5643,7 @@ function saveEmployees(){
 }
 function saveTabs(){
   tabs = _schemaCheckSave('tabs', tabs); // strip any malformed tabs before saving
-  localStorage.setItem('pos2_tabs',JSON.stringify(tabs));
+  _lsSave('pos2_tabs', tabs);
   if(fbDb){
     if(_netOnline){
       fbDb.ref('tabs').set(toFbObj(tabs)).catch(e=>{
@@ -5253,8 +5654,7 @@ function saveTabs(){
   }
 }
 function saveMenu(){
-  try{localStorage.setItem('pos2_menu',JSON.stringify(menuItems));}
-  catch(e){if(typeof _log==='function')_log('error','Storage','saveMenu failed',e&&e.message||'unknown');}
+  _lsSave('pos2_menu', menuItems);
   if(fbDb){
     if(_netOnline){fbDb.ref('menu').set(toFbObj(menuItems)).catch(()=>{_enqueueOffline('menu');});}
     else{_enqueueOffline('menu');}
@@ -5264,9 +5664,7 @@ function saveTransactions(){
   transactions = _schemaCheckSave('transactions', transactions); // strip malformed records
   _pruneTransactions(); // archive if over limit
   // Write to localStorage (fast, sync)
-  try{localStorage.setItem('pos2_transactions',JSON.stringify(transactions));}catch(e){
-    // localStorage full — that's exactly what IndexedDB is for; continue without it
-  }
+  _lsSave('pos2_transactions', transactions);
   // Write to IndexedDB (large capacity)
   idbSaveTx(transactions);
   // Write to Firebase (with offline queue fallback)
@@ -5276,8 +5674,7 @@ function saveTransactions(){
   }
 }
 function saveSpecials(){
-  try{localStorage.setItem('pos2_specials',JSON.stringify(dailySpecials));}
-  catch(e){if(typeof _log==='function')_log('error','Storage','saveSpecials failed',e&&e.message||'unknown');}
+  _lsSave('pos2_specials', dailySpecials);
   if(fbDb){
     if(_netOnline){fbDb.ref('specials').set(toFbObj(dailySpecials)).catch(()=>{_enqueueOffline('specials');});}
     else{_enqueueOffline('specials');}
@@ -5313,7 +5710,7 @@ function addModPriceDefault(){
   showToast(`"${nm}" added to modifier upcharges`,'success');
 }
 function saveShiftNotes(){
-  try{localStorage.setItem('pos2_shiftnotes',JSON.stringify(shiftNotes));}
+  try{_lsSave('pos2_shiftnotes', shiftNotes);}
   catch(e){if(typeof _log==='function')_log('error','Storage','saveShiftNotes failed',e&&e.message||'unknown');}
 }
 function saveSettings(){
@@ -5445,7 +5842,7 @@ const _DRAIN_RETRY_BASE_MS  = 1000;  // first retry delay; doubles each attempt
 
 function _saveOfflineQueue(){
   try{
-    localStorage.setItem('pos2_offline_queue', JSON.stringify(_offlineQueue));
+    _lsSave('pos2_offline_queue', _offlineQueue);
   }catch(e){
     if(typeof _log==='function') _log('error','OfflineQueue','Could not persist queue to localStorage',e.message);
   }
@@ -5578,7 +5975,9 @@ window.addEventListener('online',()=>{
   _netOnline=true;
   updateSyncStatus('connecting');
   _renderOfflineBanner();
-  if(fbDb)_drainOfflineQueue();
+  if(fbDb)_drainOfflineQueue().then(()=>{
+    showToast('✅ Back online — data synced to cloud','success');
+  });
 });
 window.addEventListener('offline',()=>{
   _netOnline=false;
@@ -5868,14 +6267,25 @@ function authPin(key){
 // ===================== AUTO-LOGOUT =====================
 function resetActivity(){_lastActivity=Date.now();}
 
+let _inactivityWarningShown=false;
 function startInactivityWatcher(){
   if(_inactivityInterval)clearInterval(_inactivityInterval);
   _inactivityInterval=setInterval(()=>{
     if(!currentUser)return;
     const timeout=(settings.logoutTimeout||0)*60*1000;
     if(timeout<=0)return;
-    if(Date.now()-_lastActivity>timeout){
+    const idle=Date.now()-_lastActivity;
+    const warnAt=timeout-30000;
+    if(idle>timeout){
+      _inactivityWarningShown=false;
+      _hideInactivityWarning();
       logout(true);
+    } else if(idle>warnAt&&warnAt>0&&!_inactivityWarningShown){
+      _inactivityWarningShown=true;
+      _showInactivityWarning(Math.ceil((timeout-idle)/1000));
+    } else if(idle<=warnAt){
+      _inactivityWarningShown=false;
+      _hideInactivityWarning();
     }
     // LOCK TIMEOUT: release any tab locks older than 10 minutes (crash/abandon recovery)
     const LOCK_TTL = 10 * 60 * 1000;
@@ -6163,43 +6573,69 @@ function playSuccessBeep(){
 
 // ===================== AUDIT LOG =====================
 function renderAuditLog(){
+  // Populate employee dropdown
+  const empSel=document.getElementById('auditEmpFilter');
+  if(empSel&&empSel.options.length<=1){
+    employees.forEach(e=>{const o=document.createElement('option');o.value=e.id;o.textContent=e.emoji+' '+e.name;empSel.appendChild(o);});
+  }
+  const filterEmp=document.getElementById('auditEmpFilter')?.value||'';
+  const filterType=document.getElementById('auditTypeFilter')?.value||'';
+  const filterFrom=document.getElementById('auditDateFrom')?.value;
+  const filterTo=document.getElementById('auditDateTo')?.value;
+  const fromDate=filterFrom?new Date(filterFrom+'T00:00:00'):null;
+  const toDate=filterTo?new Date(filterTo+'T23:59:59'):null;
+
   const rows=[];
   transactions.forEach(tx=>{
     const emp=employees.find(e=>e.id===tx.employeeId);
     const empName=emp?emp.emoji+' '+emp.name:'Unknown';
     const d=new Date(tx.timestamp);
-    const time=d.toLocaleDateString([],{month:'short',day:'numeric'})+' '+d.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'});
+    const time=d.toLocaleDateString([],{month:'short',day:'numeric',year:'numeric'})+' '+d.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'});
     const tabName=tx.tabName||'Quick Sale';
-    if(tx.voided){
-      rows.push({time,tab:tabName,emp:empName,type:'Void',badge:'void-badge',label:'VOID',note:'',amount:tx.total,ts:d});
+    const empId=String(tx.employeeId);
+    if(filterEmp&&empId!==String(filterEmp))return;
+    if(fromDate&&d<fromDate)return;
+    if(toDate&&d>toDate)return;
+    if(tx.voided&&(!filterType||filterType==='Void')){
+      const voidedBy=tx.voidedBy||empName;
+      rows.push({time,tab:tabName,emp:empName,type:'Void',label:'VOID',note:tx.voidReason||(tx.voidedBy&&tx.voidedBy!==empName?'by '+tx.voidedBy:''),amount:tx.total,ts:d});
     }
-    if(tx.isRefund){
-      rows.push({time,tab:tabName,emp:empName,type:'Refund',badge:'refund-badge',label:'↩ REFUND',note:tx.refundReason||'',amount:Math.abs(tx.total),ts:d});
+    if(tx.isRefund&&(!filterType||filterType==='Refund')){
+      rows.push({time,tab:tabName,emp:empName,type:'Refund',label:'↩ REFUND',note:tx.refundReason||'',amount:Math.abs(tx.total),ts:d});
     }
-    if(tx.discountReason&&!tx.voided){
+    if(tx.discountReason&&!tx.voided&&(!filterType||filterType==='Discount')){
       const discAmt=tx.discountAmt||0;
-      rows.push({time,tab:tabName,emp:empName,type:'Discount',badge:'',label:'🏷 '+tx.discountReason,note:(tx.discountPct>0?tx.discountPct+'%':'$'+discAmt.toFixed(2))+' off',amount:discAmt,ts:d});
+      rows.push({time,tab:tabName,emp:empName,type:'Discount',label:'🏷 '+tx.discountReason,note:(tx.discountPct>0?tx.discountPct+'%':'$'+discAmt.toFixed(2))+' off',amount:discAmt,ts:d});
     }
-    if((tx.compTotal||0)>0&&!tx.voided){
-      rows.push({time,tab:tabName,emp:empName,type:'Comp',badge:'',label:'🎁 Comp',note:'',amount:tx.compTotal,ts:d});
+    if((tx.compTotal||0)>0&&!tx.voided&&(!filterType||filterType==='Comp')){
+      rows.push({time,tab:tabName,emp:empName,type:'Comp',label:'🎁 Comp',note:'',amount:tx.compTotal,ts:d});
     }
   });
   rows.sort((a,b)=>b.ts-a.ts);
+
+  const countEl=document.getElementById('auditResultCount');
+  if(countEl)countEl.textContent=rows.length+' event'+(rows.length!==1?'s':'')+(filterEmp||filterType||filterFrom||filterTo?' (filtered)':'');
+
   const tbl=document.getElementById('auditTable');
   if(!tbl)return;
   if(rows.length===0){
-    tbl.innerHTML='<tr><td colspan="5" style="text-align:center;padding:24px;color:var(--text2);">No voids, refunds, or discounts on record</td></tr>';
+    tbl.innerHTML='<tr><td colspan="6" style="text-align:center;padding:24px;color:var(--text2);">No events match filters</td></tr>';
     return;
   }
-  const typeColor={Void:'var(--red)',Refund:'var(--blue)',Discount:'var(--purple)',Comp:'var(--purple)'};
-  tbl.innerHTML=`<tr><th>Time</th><th>Tab</th><th>Employee</th><th>Action</th><th>Amount</th></tr>`+
+  const typeColor={Void:'var(--red)',Refund:'var(--blue)',Discount:'var(--purple)',Comp:'var(--green)'};
+  tbl.innerHTML=`<tr><th>Time</th><th>Tab</th><th>Employee</th><th>Action</th><th>Note</th><th>Amount</th></tr>`+
     rows.map(r=>`<tr>
-      <td style="color:var(--text2)">${r.time}</td>
+      <td style="color:var(--text2);font-size:.8rem">${r.time}</td>
       <td>${r.tab}</td>
       <td>${r.emp}</td>
-      <td><span style="color:${typeColor[r.type]||'var(--text)'};font-weight:600">${r.label}</span>${r.note?` <span style="color:var(--text2);font-size:.75rem">${r.note}</span>`:''}</td>
+      <td><span style="color:${typeColor[r.type]||'var(--text)'};font-weight:700">${r.label}</span></td>
+      <td style="color:var(--text2);font-size:.78rem">${r.note}</td>
       <td style="font-weight:700;color:${typeColor[r.type]||'var(--accent)'}">–$${r.amount.toFixed(2)}</td>
     </tr>`).join('');
+}
+function clearAuditFilters(){
+  ['auditEmpFilter','auditTypeFilter','auditDateFrom','auditDateTo'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
+  renderAuditLog();
 }
 
 // ===================== SALES GOAL BAR =====================
@@ -6426,7 +6862,7 @@ function showModal(id){document.getElementById(id).classList.remove('hidden');}
 function closeModal(id){
   document.getElementById(id).classList.add('hidden');
   if(id==='menuItemModal'){const dd=document.getElementById('emojiPickerDropdown');if(dd)dd.classList.add('hidden');document.removeEventListener('click',_epClose);}
-  if(id==='checkoutModal'){cancelPayCountdown();closeCustomTipDrawer();closeCashDrawer();if(checkoutTabId){_unlockTab(checkoutTabId);checkoutTabId=null;}}
+  if(id==='checkoutModal'){cancelPayCountdown();closeCustomTipDrawer();closeCashDrawer();_releaseWakeLock();if(checkoutTabId){_unlockTab(checkoutTabId);checkoutTabId=null;}}
 }
 document.querySelectorAll('.modal-overlay').forEach(o=>o.addEventListener('click',e=>{if(e.target===o)o.classList.add('hidden');}));
 
@@ -6582,7 +7018,7 @@ function getTipRoster(dept){
   employees.filter(e=>e.active!==false&&(e.dept===dept||e.dept==='both')).forEach(e=>{r[e.id]={inPool:true,customPct:null};});
   return r;
 }
-function saveTipRoster(dept,r){localStorage.setItem('pos2_tip_roster_'+dept,JSON.stringify(r));}
+function saveTipRoster(dept,r){_lsSave('pos2_tip_roster_'+dept,r);}
 
 // Compute how much of each transaction's tip belongs to bar vs kitchen
 function computeDeptTips(txList){
@@ -6635,8 +7071,8 @@ function filterTipPoolTx(){
   }
   return tx;
 }
-function getTipPoolHistory(){try{return JSON.parse(localStorage.getItem('pos2_tp_history')||'[]');}catch(e){return[];}}
-function saveTipPoolHistory(h){localStorage.setItem('pos2_tp_history',JSON.stringify(h));}
+function getTipPoolHistory(){return _safeParse('pos2_tp_history',[]);}
+function saveTipPoolHistory(h){_lsSave('pos2_tp_history',h);}
 
 function saveTipPoolSession(){
   const tx=filterTipPoolTx();
@@ -7110,12 +7546,12 @@ function renderTrendChart(){
 
 
 // ── EVENT MODE ITEM EDITOR ──────────────────────────────────────
-let _eventModeItems = JSON.parse(localStorage.getItem('pos2_event_items') || 'null');
+let _eventModeItems = _safeParse('pos2_event_items', null);
 // null = auto mode (pins + top sellers); array of ids = custom list
 
 function saveEventModeItems(ids){
   _eventModeItems = ids;
-  localStorage.setItem('pos2_event_items', JSON.stringify(ids));
+  _lsSave('pos2_event_items', ids);
 }
 
 function openEventEditor(){
@@ -7728,13 +8164,13 @@ function _autoBackup(){
       ts:new Date().toISOString(),
       tabs:JSON.parse(localStorage.getItem('pos2_tabs')||'[]'),
       transactions:JSON.parse(localStorage.getItem('pos2_transactions')||'[]'),
-      employees:JSON.parse(localStorage.getItem('pos2_employees')||'[]'),
+      employees:_safeParse('pos2_employees',[]),
     };
     // Keep last 3 rolling backups
-    const existing=JSON.parse(localStorage.getItem('pos2_backups')||'[]');
+    const existing=_safeParse('pos2_backups',[]);
     existing.unshift(snap);
     const trimmed=existing.slice(0,3);
-    localStorage.setItem('pos2_backups',JSON.stringify(trimmed));
+    _lsSave('pos2_backups',trimmed);
     if(typeof _log==='function') _log('info','Backup','Auto-snapshot saved','Tabs: '+snap.tabs.length+' | Txns: '+snap.transactions.length);
   }catch(e){
     if(typeof _log==='function') _log('warn','Backup','Auto-backup failed — localStorage may be full',e&&e.message||'');
@@ -7753,9 +8189,9 @@ function _pruneTransactions(){
   // Archive oldest to a separate localStorage key before dropping
   const toArchive = transactions.slice(0, excess); // oldest first
   try{
-    const existing=JSON.parse(localStorage.getItem('pos2_tx_archive')||'[]');
+    const existing=_safeParse('pos2_tx_archive',[]);
     const merged=[...existing,...toArchive].slice(-10000); // cap archive at 10k
-    localStorage.setItem('pos2_tx_archive',JSON.stringify(merged));
+    _lsSave('pos2_tx_archive',merged);
   }catch(e){}
   transactions = transactions.slice(excess); // keep newest
   if(typeof _log==='function') _log('warn','Pruning','Transactions pruned: '+excess+' oldest archived','Archive key: pos2_tx_archive');
@@ -8139,7 +8575,7 @@ function _devDiag(type){
       result = 'LocalStorage usage:\n';
       keys.forEach(e => result += '  ' + e.k + ': ' + e.size + '\n');
       result += '\nTotal (all keys): ~' + (total/1024).toFixed(1) + ' KB of ~5120 KB limit';
-      const backups=JSON.parse(localStorage.getItem('pos2_backups')||'[]');
+      const backups=_safeParse('pos2_backups',[]);
       result += '\n\nAuto-backups stored: ' + backups.length + '/3';
       backups.forEach((b,i)=>{ result += '\n  ['+i+'] '+b.ts+' — Tabs:'+b.tabs.length+' Txns:'+b.transactions.length; });
     }
@@ -8207,7 +8643,7 @@ function _devDiag(type){
       }
     }
     else if(type === 'backup'){
-      const backups = JSON.parse(localStorage.getItem('pos2_backups')||'[]');
+      const backups = _safeParse('pos2_backups',[]);
       result = 'Auto-backup snapshots (' + backups.length + '/3):\n\n';
       if(backups.length === 0){
         result += 'No backups yet — first backup runs 5 minutes after login.';
@@ -8587,6 +9023,13 @@ document.addEventListener('visibilitychange', function(){
 
 // ===================== END SESSION GUARDS =====================
 </script>
+<!-- Payment Lock Overlay -->
+<div id="payLockOverlay" style="display:none;position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,.65);flex-direction:column;align-items:center;justify-content:center;gap:16px;">
+  <div style="width:52px;height:52px;border:5px solid var(--surface3);border-top-color:var(--accent);border-radius:50%;animation:spin .8s linear infinite;"></div>
+  <div style="color:#fff;font-size:1.1rem;font-weight:700;" id="payLockMsg">Processing payment…</div>
+  <div style="color:rgba(255,255,255,.6);font-size:.8rem;">Please do not close this screen</div>
+</div>
+
 <!-- Cash Numpad Drawer -->
 <div class="tip-numpad-drawer" id="cashNumpadDrawer">
   <div class="drawer-handle"></div>
@@ -8613,5 +9056,120 @@ document.addEventListener('visibilitychange', function(){
   </div>
   <div class="tip-numpad" id="drawerNumpad"></div>
 </div>
+<!-- Inactivity Warning Toast -->
+<div id="inactivityWarning" style="display:none;position:fixed;bottom:80px;left:50%;transform:translateX(-50%);z-index:9998;background:var(--surface);border:2px solid var(--accent);border-radius:12px;padding:14px 20px;text-align:center;box-shadow:0 8px 32px rgba(0,0,0,.5);min-width:260px;">
+  <div style="font-size:.85rem;font-weight:700;margin-bottom:8px;">⏱ Auto-logout in <span id="inactivityCountdown">30</span>s</div>
+  <button class="btn btn-md btn-accent" style="width:100%;" onclick="resetActivity();_hideInactivityWarning();">Stay Logged In</button>
+</div>
+
+<script>
+// ===================== BEFOREUNLOAD GUARD =====================
+window.addEventListener('beforeunload',e=>{
+  const openTabs=typeof tabs!=='undefined'&&tabs.filter(t=>t.status==='open').length>0;
+  const paymentActive=typeof checkoutTabId!=='undefined'&&checkoutTabId!==null;
+  if(openTabs||paymentActive){
+    e.preventDefault();
+    e.returnValue='You have open tabs or a payment in progress. Are you sure you want to leave?';
+    return e.returnValue;
+  }
+});
+
+// ===================== PAGEHIDE (iOS Safari) =====================
+// iOS Safari never fires 'beforeunload' reliably when swiping away or closing.
+// 'pagehide' fires on ALL browsers including iOS — use it to force-save state.
+window.addEventListener('pagehide',()=>{
+  try{
+    if(typeof saveTabs==='function') saveTabs();
+    if(typeof saveTransactions==='function') saveTransactions();
+    if(typeof _log==='function') _log('info','PageHide','Force-saved all state on pagehide',null);
+  }catch(e){}
+});
+
+// ===================== INACTIVITY WARNING =====================
+let _inactivityWarnTimer=null;
+function _showInactivityWarning(secs){
+  const el=document.getElementById('inactivityWarning');
+  const cd=document.getElementById('inactivityCountdown');
+  if(!el)return;
+  el.style.display='block';
+  if(cd)cd.textContent=secs;
+  if(_inactivityWarnTimer)clearInterval(_inactivityWarnTimer);
+  let s=secs;
+  _inactivityWarnTimer=setInterval(()=>{
+    s--;
+    if(cd)cd.textContent=Math.max(0,s);
+    if(s<=0){clearInterval(_inactivityWarnTimer);_inactivityWarnTimer=null;}
+  },1000);
+}
+function _hideInactivityWarning(){
+  const el=document.getElementById('inactivityWarning');
+  if(el)el.style.display='none';
+  if(_inactivityWarnTimer){clearInterval(_inactivityWarnTimer);_inactivityWarnTimer=null;}
+}
+
+// ===================== ITEM QUANTITY CAP =====================
+const MAX_ITEM_QTY=20;
+const _origChangeQty=typeof changeQty==='function'?changeQty:null;
+if(typeof changeQty==='function'){
+  const __cq=changeQty;
+  window.changeQty=function(idx,delta){
+    const item=currentOrder[idx];
+    if(item&&delta>0&&item.qty>=MAX_ITEM_QTY){
+      showToast(`Max ${MAX_ITEM_QTY} of the same item per order. Start a new tab to add more.`,'error');
+      return;
+    }
+    __cq(idx,delta);
+  };
+}
+
+// ===================== DATA INTEGRITY CHECK =====================
+function _integrityCheck(){
+  if(typeof transactions==='undefined')return;
+  let fixed=0;
+  transactions.forEach(tx=>{
+    if(isNaN(tx.total)||!isFinite(tx.total)){tx.total=0;fixed++;}
+    if(!tx.timestamp){tx.timestamp=new Date().toISOString();fixed++;}
+    if(typeof tx.tip!=='number'){tx.tip=0;fixed++;}
+  });
+  if(fixed>0){
+    saveTransactions();
+    if(typeof _log==='function')_log('warn','Integrity','Auto-fixed '+fixed+' corrupted transaction fields','');
+  }
+}
+// Run integrity check 10s after boot and every 30 min
+setTimeout(_integrityCheck,10000);
+setInterval(_integrityCheck,30*60*1000);
+
+// ===================== BOOT-TIME OVERLAY RESET =====================
+// If the page was reloaded while a payment was in progress (crash/hard refresh),
+// make sure the lock overlay is hidden and any stale tab lock is released.
+(function _bootOverlayReset(){
+  const overlay = document.getElementById('payLockOverlay');
+  if(overlay && overlay.style.display !== 'none'){
+    overlay.style.display = 'none';
+    if(typeof _log === 'function') _log('warn','Boot','Pay lock overlay was visible at boot — force-hidden (stale from prior crash)',null);
+  }
+  // Release any tab locks that survived a reload (they're in-memory only so
+  // they're gone anyway after reload — this is a no-op safety belt).
+  if(typeof _tabLocks !== 'undefined') _tabLocks.clear();
+  if(typeof _tabLockTimestamps !== 'undefined') _tabLockTimestamps.clear();
+})();
+
+// ===================== LOCALSTORAGE QUOTA GUARD =====================
+function _checkStorageQuota(){
+  try{
+    const test='pos2_quota_test';
+    let total=0;
+    for(let k in localStorage){if(localStorage.hasOwnProperty(k))total+=localStorage[k].length*2;}
+    const usedMB=(total/1024/1024).toFixed(1);
+    if(total>4*1024*1024){// >4MB warning
+      showToast(`⚠️ Storage at ${usedMB}MB — consider exporting and clearing old transactions in Reports`,'error');
+      if(typeof _log==='function')_log('warn','Storage','localStorage near capacity',usedMB+'MB used');
+    }
+  }catch(e){}
+}
+setTimeout(_checkStorageQuota,15000);
+setInterval(_checkStorageQuota,15*60*1000);
+</script>
 </body>
 </html>
