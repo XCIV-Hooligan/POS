@@ -201,6 +201,8 @@ header{background:var(--surface);border-bottom:1px solid var(--border);padding:8
 /* OFFLINE BANNER */
 #offlineBanner{display:none;background:linear-gradient(90deg,#1a1a24,#22222f);border-bottom:1px solid var(--border);padding:5px 16px;font-size:.75rem;font-weight:700;display:flex;align-items:center;justify-content:space-between;gap:8px;flex-shrink:0;}
 #offlineBanner.show{display:flex;}
+#offlineBanner.offline-hard{background:linear-gradient(90deg,#7f1d1d,#991b1b);border-bottom:2px solid #ef4444;animation:blink-bg 2s ease-in-out infinite;}
+@keyframes blink-bg{0%,100%{opacity:1;}50%{opacity:.85;}}
 .offline-dot{width:8px;height:8px;border-radius:50%;background:var(--red);flex-shrink:0;animation:blink 1.4s ease-in-out infinite;}
 @keyframes blink{0%,100%{opacity:1;}50%{opacity:.3;}}
 .sync-progress-bar{height:3px;background:var(--surface3);border-radius:2px;overflow:hidden;width:120px;flex-shrink:0;}
@@ -564,9 +566,65 @@ input:checked+.toggle-track::after{left:23px;}
   #_printOverlay{display:block!important;position:static!important;padding:0!important;}
   #_printOverlay ._print-close-btn{display:none!important;}
 }
+
+/* ── CUSTOMER DISPLAY ─────────────────────────────────────────────────────── */
+#customerDisplay{display:none;position:fixed;inset:0;z-index:99998;background:#0f0f13;flex-direction:column;align-items:center;justify-content:space-between;padding:40px 60px;}
+#customerDisplay.cd-active{display:flex;}
+.cd-header{width:100%;display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;}
+.cd-bar-name{font-size:2.2rem;font-weight:900;color:var(--accent);letter-spacing:.04em;}
+.cd-clock{font-size:1.4rem;color:var(--text2);font-weight:600;}
+.cd-main{flex:1;width:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:0;}
+.cd-idle{text-align:center;animation:cd-pulse 3s ease-in-out infinite;}
+.cd-idle-emoji{font-size:8rem;margin-bottom:20px;}
+.cd-idle-msg{font-size:2.8rem;font-weight:900;color:var(--accent);}
+.cd-idle-sub{font-size:1.3rem;color:var(--text2);margin-top:10px;}
+@keyframes cd-pulse{0%,100%{opacity:1;}50%{opacity:.6;}}
+.cd-order-wrap{width:100%;max-width:820px;}
+.cd-order-title{font-size:1.1rem;font-weight:700;color:var(--text2);text-transform:uppercase;letter-spacing:.1em;margin-bottom:16px;}
+.cd-items{width:100%;border-collapse:collapse;}
+.cd-items tr{border-bottom:1px solid var(--border);}
+.cd-items td{padding:10px 6px;font-size:1.25rem;}
+.cd-items .cd-item-name{color:var(--text);font-weight:600;}
+.cd-items .cd-item-qty{color:var(--text2);width:50px;text-align:center;}
+.cd-items .cd-item-price{color:var(--accent);font-weight:700;text-align:right;width:110px;}
+.cd-totals{width:100%;max-width:820px;margin-top:20px;border-top:2px solid var(--border);padding-top:16px;}
+.cd-total-row{display:flex;justify-content:space-between;align-items:center;padding:5px 6px;font-size:1.2rem;color:var(--text2);}
+.cd-total-row.cd-grand{font-size:2.2rem;font-weight:900;color:var(--text);padding:12px 6px;border-top:2px solid var(--border);margin-top:8px;}
+.cd-total-row.cd-grand span:last-child{color:var(--accent);}
+.cd-processing{text-align:center;}
+.cd-processing-icon{font-size:6rem;margin-bottom:20px;}
+.cd-processing-msg{font-size:2.5rem;font-weight:900;color:var(--blue);}
+.cd-processing-amt{font-size:3.5rem;font-weight:900;color:var(--accent);margin-top:10px;}
+.cd-processing-sub{font-size:1.2rem;color:var(--text2);margin-top:8px;}
+.cd-approved{text-align:center;animation:cd-pop .4s ease-out;}
+.cd-approved-icon{font-size:8rem;margin-bottom:20px;}
+.cd-approved-msg{font-size:3rem;font-weight:900;color:var(--green);}
+.cd-approved-amt{font-size:4rem;font-weight:900;color:var(--accent);margin-top:10px;}
+@keyframes cd-pop{0%{transform:scale(.7);opacity:0;}100%{transform:scale(1);opacity:1;}}
+.cd-footer{width:100%;text-align:center;padding-top:20px;border-top:1px solid var(--border);}
+.cd-footer-msg{font-size:1rem;color:var(--text2);}
 </style>
 </head>
 <body>
+
+<!-- ==================== CUSTOMER DISPLAY ==================== -->
+<div id="customerDisplay">
+  <div class="cd-header">
+    <div class="cd-bar-name" id="cdBarName">🍺 The Local</div>
+    <div class="cd-clock" id="cdClock"></div>
+  </div>
+  <div class="cd-main" id="cdMain">
+    <div class="cd-idle">
+      <div class="cd-idle-emoji">🍺</div>
+      <div class="cd-idle-msg" id="cdIdleMsg">Welcome!</div>
+      <div class="cd-idle-sub" id="cdIdleSub">Your order will appear here</div>
+    </div>
+  </div>
+  <div class="cd-footer">
+    <div class="cd-footer-msg" id="cdFooterMsg">Thank you! Drink responsibly 🍺</div>
+  </div>
+</div>
+
 <div id="_printOverlay">
   <button class="_print-close-btn" onclick="_closePrintOverlay()" style="position:fixed;top:12px;right:12px;z-index:100000;background:#333;color:#fff;border:none;border-radius:8px;padding:8px 16px;font-size:.9rem;cursor:pointer;">✕ Close</button>
   <div id="_printContent"></div>
@@ -673,6 +731,7 @@ input:checked+.toggle-track::after{left:23px;}
         <span class="shift-tip-pill" id="shiftTipPill" style="display:none;">💰 $0.00</span>
       </div>
       <button class="btn btn-sm btn-ghost" style="color:var(--accent);font-weight:700;" onclick="enterEventMode()" title="Fast-pour event mode">⚡ Event</button>
+      <button class="btn btn-sm btn-ghost" style="color:var(--purple);font-weight:700;" onclick="_openCustomerDisplay()" title="Open customer-facing display in new tab">📺 Display</button>
       <button class="btn btn-sm btn-ghost" style="color:var(--green);font-weight:700;" onclick="openCloseShift()">⏹ Close Shift</button>
       <button class="btn btn-sm btn-ghost" onclick="logout()">Log Out</button>
     </div>
@@ -723,8 +782,11 @@ input:checked+.toggle-track::after{left:23px;}
       </div>
       <!-- Sub-category tabs -->
       <div class="sub-cats" id="subCatBar"></div>
-      <!-- Search bar -->
-      <div class="search-wrap"><span class="search-icon">🔍</span><input class="menu-search" id="menuSearch" placeholder="Search menu…" oninput="renderMenu()" autocomplete="off"></div>
+      <!-- Search bar + Quick 86 button (owner/manager only) -->
+      <div style="display:flex;gap:6px;align-items:center;padding:0 8px 0 8px;">
+        <div class="search-wrap" style="flex:1;margin:0;padding:0;"><span class="search-icon">🔍</span><input class="menu-search" id="menuSearch" placeholder="Search menu…" oninput="renderMenu()" autocomplete="off"></div>
+        <button class="btn btn-sm btn-red" style="flex-shrink:0;font-size:.75rem;padding:6px 10px;" onclick="openQuick86()" title="Quickly 86 or restore items">🚫 86</button>
+      </div>
       <!-- Menu grid -->
       <div class="menu-grid" id="menuGrid"></div>
     </div>
@@ -767,6 +829,7 @@ input:checked+.toggle-track::after{left:23px;}
             </div>
             <div class="order-actions-row">
               <button class="btn btn-sm btn-ghost" style="flex:1;font-size:.78rem" onclick="openDiscountModal()" id="discountBtn" disabled>🏷 Discount</button>
+              <button class="btn btn-sm btn-ghost" style="flex:1;font-size:.78rem" onclick="reprintLastReceipt()" id="reprintBtn">🖨 Reprint</button>
             </div>
           </div>
         </div>
@@ -806,7 +869,8 @@ input:checked+.toggle-track::after{left:23px;}
         <div class="section-title">📊 Sales Reports</div>
         <div style="display:flex;gap:7px;">
           <button class="btn btn-sm btn-ghost" onclick="renderReports()">🔄 Refresh</button>
-          <button class="btn btn-sm btn-blue owner-only manager-only" onclick="exportCSV()">⬇ Export CSV</button>
+          <button class="btn btn-sm btn-blue owner-only manager-only" onclick="exportCSV(true)" title="Export today's transactions to Excel/CSV">⬇ CSV Today</button>
+          <button class="btn btn-sm btn-ghost owner-only manager-only" onclick="exportCSV(false)" title="Export all transactions to Excel/CSV">⬇ CSV All</button>
           <button class="btn btn-sm btn-purple owner-only manager-only" onclick="openEndOfNight()">🌙 End of Night</button>
         </div>
       </div>
@@ -818,6 +882,7 @@ input:checked+.toggle-track::after{left:23px;}
         <button class="report-tab-btn" id="rtCustom" onclick="setReportPeriod('custom')">📅 Custom</button>
         <button class="report-tab-btn" id="rtAudit" onclick="setReportPeriod('audit')" style="color:var(--purple);">🔍 Audit Log</button>
         <button class="report-tab-btn" id="rtDisputes" onclick="setReportPeriod('disputes')" style="color:#f97316;">🚩 Disputes</button>
+        <button class="report-tab-btn" id="rtShift" onclick="setReportPeriod('shift')" style="color:var(--green);">👥 Shift</button>
       </div>
       <!-- View toggle: All / Bar / Kitchen -->
       <div style="display:flex;gap:6px;margin-top:6px;margin-bottom:2px;">
@@ -874,6 +939,9 @@ input:checked+.toggle-track::after{left:23px;}
         <div style="background:var(--surface);border:1px solid #f97316;border-radius:var(--radius);overflow:hidden;margin-bottom:16px;">
           <table class="report-table" id="disputesTable"></table>
         </div>
+      </div>
+      <div id="shiftSection" style="display:none;">
+        <div id="shiftBody"></div>
       </div>
       <div id="reportsMainSection">
       <div class="reports-grid" id="reportsStats"></div>
@@ -1213,6 +1281,26 @@ input:checked+.toggle-track::after{left:23px;}
         <div id="helcimTestResult" style="font-size:.72rem;margin-top:8px;min-height:16px;"></div>
       </div>
 
+      <!-- RECEIPT PRINTER / CASH DRAWER -->
+      <div class="settings-section">
+        <div class="section-label" style="margin-bottom:10px;">🖨️ Receipt Printer &amp; Cash Drawer</div>
+        <div class="helcim-note" style="margin-bottom:12px;font-size:.72rem;">
+          Enter your receipt printer's IP address to automatically kick the cash drawer on cash sales.<br><br>
+          • <strong>Star TSP143III LAN</strong> — check printer IP by holding Feed button on power-up (prints config ticket)<br>
+          • <strong>Epson TM-T20III / TM-T88VI</strong> — same, or check router's connected devices list<br><br>
+          The printer and iPad must be on the same Wi-Fi network.
+        </div>
+        <div class="form-group">
+          <label class="form-label">Printer IP Address <span style="font-weight:400;color:var(--text2)">(e.g. 192.168.1.105)</span></label>
+          <input class="form-input" id="settingPrinterIp" placeholder="192.168.1.105">
+        </div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;">
+          <button class="btn btn-md btn-blue" onclick="savePrinterSettings()" style="flex:1;">Save Printer Settings</button>
+          <button class="btn btn-md btn-ghost" onclick="testCashDrawer()" style="flex:1;">🔔 Test Drawer Kick</button>
+        </div>
+        <div id="printerTestResult" style="font-size:.72rem;margin-top:8px;min-height:16px;"></div>
+      </div>
+
       <!-- SMS / EMAIL RECEIPTS -->
       <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:18px;margin-top:12px;">
         <div class="section-label" style="margin-bottom:10px;">📨 SMS &amp; Email Receipts</div>
@@ -1450,9 +1538,31 @@ input:checked+.toggle-track::after{left:23px;}
   <div class="modal" style="max-width:500px;">
     <div class="modal-header"><div class="modal-title">🌙 End of Night Report</div><button class="modal-close" onclick="closeModal('eodModal')">✕</button></div>
     <div class="modal-body" id="eodBody"></div>
+    <div class="modal-footer" style="flex-direction:column;gap:6px;">
+      <div style="display:flex;gap:6px;width:100%;">
+        <button class="btn btn-md btn-ghost" style="flex:1" onclick="closeModal('eodModal')">Close</button>
+        <button class="btn btn-md btn-blue" style="flex:1" onclick="printEOD()">🖨 Print Report</button>
+      </div>
+      <button class="btn btn-md btn-red" style="width:100%;font-weight:700;" onclick="runZReport()">⚡ Run Z-Report &amp; Close Out Day</button>
+      <div style="font-size:.7rem;color:var(--text2);text-align:center;">Z-Report resets the ticket counter (T-001) and exports today's CSV for your records.</div>
+    </div>
+  </div>
+</div>
+
+<!-- QUICK 86 MODAL -->
+<div class="modal-overlay hidden" id="quick86Modal">
+  <div class="modal" style="max-width:420px;">
+    <div class="modal-header">
+      <div class="modal-title">🚫 Quick 86 — Item Availability</div>
+      <button class="modal-close" onclick="closeModal('quick86Modal')">✕</button>
+    </div>
+    <div class="modal-body" style="padding:8px 12px;">
+      <div style="font-size:.75rem;color:var(--text2);margin-bottom:10px;">Tap an item to toggle availability. Changes sync to all devices instantly.</div>
+      <input class="form-input" id="q86Search" placeholder="🔍 Search items…" oninput="renderQuick86()" style="margin-bottom:10px;">
+      <div id="q86List" style="max-height:360px;overflow-y:auto;"></div>
+    </div>
     <div class="modal-footer">
-      <button class="btn btn-md btn-ghost" style="flex:1" onclick="closeModal('eodModal')">Close</button>
-      <button class="btn btn-md btn-blue" style="flex:1" onclick="printEOD()">🖨 Print Report</button>
+      <button class="btn btn-md btn-ghost" style="flex:1" onclick="closeModal('quick86Modal')">Done</button>
     </div>
   </div>
 </div>
@@ -1849,7 +1959,7 @@ function _safeSettingsSave(){
   _lsSave('pos2_settings', settings);
 }
 
-let settings = Object.assign({barName:'The Local',taxRate:8,tips:[15,18,20,25],helcimToken:'',helcimTerminal:'',helcimCurrency:'USD',helcimProxy:'',twilioSid:'',twilioToken:'',twilioFrom:'',sendgridKey:'',receiptFromEmail:'',autoPrint:false,gratuityPct:0,gratuityMin:50,logoutTimeout:5,chime:'ascending',theme:'dark',dailyGoal:0,weeklyGoal:0,discountPresets:[{name:'Employee',pct:50,flat:0},{name:'Industry',pct:25,flat:0},{name:'Military',pct:15,flat:0}],receiptFooter:'Thank you! Drink responsibly 🍺',showReceiptQR:true,happyHours:[{id:1,name:'Happy Hour',startTime:'16:00',endTime:'19:00',days:[1,2,3,4,5],discountPct:20,enabled:true}],dashboardPin:'0000',foodSpecialsEnabled:true,modifierPriceDefaults:{}},
+let settings = Object.assign({barName:'The Local',taxRate:8,tips:[15,18,20,25],helcimToken:'',helcimTerminal:'',helcimCurrency:'USD',helcimProxy:'',twilioSid:'',twilioToken:'',twilioFrom:'',sendgridKey:'',receiptFromEmail:'',printerIp:'',autoPrint:false,gratuityPct:0,gratuityMin:50,logoutTimeout:5,chime:'ascending',theme:'dark',dailyGoal:0,weeklyGoal:0,discountPresets:[{name:'Employee',pct:50,flat:0},{name:'Industry',pct:25,flat:0},{name:'Military',pct:15,flat:0}],receiptFooter:'Thank you! Drink responsibly 🍺',showReceiptQR:true,happyHours:[{id:1,name:'Happy Hour',startTime:'16:00',endTime:'19:00',days:[1,2,3,4,5],discountPct:20,enabled:true}],dashboardPin:'0000',foodSpecialsEnabled:true,modifierPriceDefaults:{}},
   _safeParse('pos2_settings',{}));
 
 let employees = _safeParse('pos2_employees', null) || [
@@ -2120,6 +2230,10 @@ function _onceTap(fn, btnEl, delayMs=3000){
 
 let nextTabId = Math.max(...tabs.map(t=>t.id),0)+1;
 let nextTxId = Math.max(...transactions.map(t=>t.id),0)+1;
+// Ticket counter — resets on Z-report close-out; persists across page reloads
+let _ticketNum = parseInt(localStorage.getItem('pos2_ticket_num')||'0');
+function _nextTicket(){ _ticketNum++; localStorage.setItem('pos2_ticket_num', _ticketNum); return _ticketNum; }
+function _ticketLabel(n){ return 'T-'+String(n).padStart(3,'0'); }
 let nextSpecialId = Math.max(...dailySpecials.map(s=>s.id),0)+1;
 let pinBuffer = '';
 let pinTargetEmp = null;
@@ -2130,6 +2244,7 @@ let lastChangeDue = 0;
 let lastTxId = null;
 let lastTxTimestamp = null;
 let lastHelcimTxId = null;  // Helcim transaction ID for the most recent payment
+let lastTicketNum = null;
 
 // Modifier state
 let _modItem = null;
@@ -4198,6 +4313,25 @@ function printCashRecon(){
   _cashRecon._date=today;
 })();
 
+function runZReport(){
+  _showConfirm(
+    '⚡ Run Z-Report & Close Out Day?\n\nThis will:\n• Export today\'s transactions as CSV\n• Reset the ticket counter back to T-001\n\nThis cannot be undone.',
+    function(){
+      // 1. Export today's CSV automatically
+      exportCSV(true);
+      // 2. Reset ticket counter
+      _ticketNum=0;
+      localStorage.setItem('pos2_ticket_num','0');
+      // 3. Close modal and notify
+      closeModal('eodModal');
+      showToast('✅ Z-Report complete — ticket counter reset to T-001','success');
+      if(typeof _log==='function')_log('info','ZReport','Z-Report run, ticket counter reset',new Date().toLocaleString());
+    },
+    null,
+    {okLabel:'Yes, Close Out', danger:true}
+  );
+}
+
 function printEOD(){
   const viewLabel=_eodView==='bar'?'Bar Report':_eodView==='kitchen'?'Kitchen Report':'Full Report';
   const bodyEl=document.getElementById('eodBody');
@@ -4682,6 +4816,7 @@ function _processPaymentInner(){
     function _doRecord(){
     _showPayLock(isCash?'Recording payment\u2026':'Finalising\u2026');
     const txTimestamp=new Date().toISOString();
+    const _txTicket = _nextTicket();
     const tx={id:nextTxId++,employeeId:currentUser.id,tabId:checkoutTabId,
       items:currentOrder.map(i=>({...i})),
       subtotal:t.subtotal,tax:t.tax,tip,autoGrat,total:finalTotal,
@@ -4690,15 +4825,17 @@ function _processPaymentInner(){
       discountReason:_sanitizeText(_discountReason||''),discountPct:_discountPct,discountFlat:_discountFlat,
       hhDiscountAmt:t.hhDiscount||0,hhName:(!_discountReason&&t.hhDiscount>0)?(getActiveHappyHour()?.name||'Happy Hour'):'',
       compTotal,
+      ticketNum: _txTicket,
       helcimTransactionId: _pendingHelcimTxId||null
     };
     _pendingHelcimTxId = null;
     // Store for receipt
     lastPayMethod=method; lastCashTendered=cashTendered; lastChangeDue=changeDue;
-    lastTxId=tx.id; lastTxTimestamp=txTimestamp; lastHelcimTxId=tx.helcimTransactionId||null;
+    lastTxId=tx.id; lastTxTimestamp=txTimestamp; lastHelcimTxId=tx.helcimTransactionId||null; lastTicketNum=_txTicket;
     transactions.push(tx);saveTransactions();
     if(checkoutTabId){const tab=tabs.find(tb=>tb.id===checkoutTabId);if(tab){tab.status='closed';tab.closedAt=new Date().toISOString();}saveTabs();_unlockTab(checkoutTabId);}
     _hidePayLock();
+    try{ window._cdSend({type:'approved', total:finalTotal}); }catch(e){}
     document.getElementById('checkoutBody').innerHTML=`
       <div class="payment-success">
         <div class="success-icon">${isCash?'💵':'✅'}</div>
@@ -4714,7 +4851,7 @@ function _processPaymentInner(){
         </div>`:`<div style="font-size:1.1rem;font-weight:700;color:var(--green)">Payment Approved!</div><div style="font-size:1.5rem;font-weight:700;color:var(--accent)">$${finalTotal.toFixed(2)}</div>`}
 
         <div style="font-size:.78rem;color:var(--text2);margin-top:6px">${method} · ${new Date().toLocaleTimeString()} · ${currentUser.name}</div>
-        <div style="font-size:.82rem;font-weight:700;color:var(--accent);margin-top:4px;letter-spacing:.04em;">TX #${String(tx.id).padStart(4,'0')}</div>
+        <div style="font-size:.82rem;font-weight:700;color:var(--accent);margin-top:4px;letter-spacing:.04em;">TX #${String(tx.id).padStart(4,'0')} &nbsp;·&nbsp; Ticket ${_ticketLabel(_txTicket)}</div>
 
         <button class="btn btn-lg btn-blue" style="width:100%;margin-top:8px;font-size:1rem;" onclick="finishPayment(true)">🖨 Print Receipt</button>
         <button class="btn btn-md btn-ghost" style="width:100%;margin-top:6px;" onclick="finishPayment(false)">Skip — Done</button>
@@ -4734,6 +4871,7 @@ function _processPaymentInner(){
         <div style="font-size:.8rem;color:var(--text2)">${selectedPayMethod==='tap'?'Hold device near reader':'Insert or tap card'}</div>
         <div style="font-size:1.4rem;font-weight:700;color:var(--accent)">$${finalTotal.toFixed(2)}</div>
       </div>`;
+    try{ window._cdSend({type:'processing', total:finalTotal}); }catch(e){}
 
     const token=settings.helcimToken||'';
     const terminalId=settings.helcimTerminal||'';
@@ -5170,6 +5308,7 @@ function buildReceiptHTML(items,subtotal,tax,tip,forPrint,autoGrat=0){
   const timeStr=now.toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit'});
   const isCash=lastPayMethod==='Cash';
   const txNum=lastTxId?String(lastTxId).padStart(4,'0'):'----';
+  const ticketLabel=lastTicketNum?_ticketLabel(lastTicketNum):'';
   const dashes='--------------------------------';
 
   const printCSS=forPrint?`
@@ -5203,7 +5342,7 @@ function buildReceiptHTML(items,subtotal,tax,tip,forPrint,autoGrat=0){
       ${settings.barAddress?`<div style="font-size:${forPrint?'9pt':'.7rem'};margin-top:2px;">${settings.barAddress}</div>`:''}
       ${settings.barPhone?`<div style="font-size:${forPrint?'9pt':'.7rem'};">${settings.barPhone}</div>`:''}
       <div style="font-size:${forPrint?'9pt':'.7rem'};margin-top:3px;">${dateStr} &nbsp; ${timeStr}</div>
-      <div style="font-size:${forPrint?'9pt':'.7rem'};">Receipt #${txNum} &nbsp;·&nbsp; ${currentUser.name}</div>
+      <div style="font-size:${forPrint?'9pt':'.7rem'};">Receipt #${txNum}${ticketLabel?' &nbsp;·&nbsp; Ticket '+ticketLabel:''} &nbsp;·&nbsp; ${currentUser.name}</div>
     </div>
     ${hr}
     ${itemRows}
@@ -5249,13 +5388,72 @@ function showReceiptModal(items,subtotal,tax,tip,autoGrat=0,hhDiscountAmt=0){
 function printReceipt(){
   _logReprint(lastTxId);
   const html=buildReceiptHTML(_lastReceiptItems,_lastReceiptSubtotal,_lastReceiptTax,_lastReceiptTip,true,_lastReceiptAutoGrat);
+  // Kick cash drawer on cash payments
+  if(lastPayMethod==='Cash') _kickCashDrawer();
   _printInPage(html, 'Receipt #'+(lastTxId||''));
+}
+
+// ── Cash Drawer Kick ─────────────────────────────────────────────────────────
+// Sends ESC/POS drawer-kick pulse when a cash receipt is printed.
+// Works with Star TSP143III and Epson TM-T20/T88 via their network interface.
+// Set the printer IP in Settings → Receipt Printer IP.
+function _kickCashDrawer(){
+  const ip = (settings.printerIp||'').trim();
+  if(!ip){
+    // No printer IP set — silently skip (don't bother staff)
+    if(typeof _log==='function') _log('info','CashDrawer','No printer IP set — skipping drawer kick',null);
+    return;
+  }
+  // ESC/POS drawer kick: ESC p 0 25 250 (pin 2) + ESC p 1 25 250 (pin 5)
+  // Star printers expose a /kick endpoint; Epson use raw socket on port 9100
+  // We try the Star LAN endpoint first (works on TSP143III LAN/WLAN)
+  const proxy = (settings.helcimProxy||'').replace(/\/$/,'');
+  const base  = proxy || `http://${ip}`;
+
+  // Star TSP143 — HTTP kick endpoint
+  fetch(`${base}/StarWebPRNT/SendMessage`, {
+    method: 'POST',
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({
+      requestline: 'SendMessage',
+      ControlPort: 'LPT1:',
+      Data: btoa('\x1B\x70\x00\x19\xFA\x1B\x70\x01\x19\xFA') // ESC p pin2 + pin5
+    })
+  }).then(r=>{
+    if(r.ok){ if(typeof _log==='function') _log('info','CashDrawer','Drawer kicked OK',ip); }
+    else { _kickCashDrawerEpson(ip, proxy); } // fallback to Epson
+  }).catch(()=>{ _kickCashDrawerEpson(ip, proxy); });
+}
+
+function _kickCashDrawerEpson(ip, proxy){
+  // Epson ePOS-Print XML endpoint (TM-T20III, TM-T88VI)
+  const base = proxy || `http://${ip}`;
+  const xml = `<?xml version="1.0" encoding="utf-8"?><epos-print xmlns="http://www.epson-pos.com/schemas/2011/03/epos-print"><pulse drawer="drawer_1" time="pulse_100"/></epos-print>`;
+  fetch(`${base}/cgi-bin/epos/service.cgi`, {
+    method: 'POST',
+    headers: {'Content-Type':'text/xml; charset=utf-8','SOAPAction':'"http://www.epson-pos.com/schemas/2011/03/epos-print"'},
+    body: xml
+  }).then(r=>{
+    if(typeof _log==='function') _log(r.ok?'info':'warn','CashDrawer',r.ok?'Epson drawer kicked':'Epson kick failed',ip);
+  }).catch(e=>{
+    if(typeof _log==='function') _log('warn','CashDrawer','Drawer kick failed — check printer IP in Settings',e.message);
+  });
+}
+// ─────────────────────────────────────────────────────────────────────────────
+
+function reprintLastReceipt(){
+  if(!lastTxId||!_lastReceiptItems||_lastReceiptItems.length===0){
+    showToast('No recent receipt to reprint','error');return;
+  }
+  printReceipt();
+  showToast('Reprinting last receipt…','info');
 }
 
 // ===================== REPORTS =====================
 function renderReports(){
   if(_reportPeriod==='disputes'){renderDisputesList();return;}
   if(_reportPeriod==='audit'){renderAuditLog();return;}
+  if(_reportPeriod==='shift'){renderShiftReport();return;}
   const isWorker=currentUser.role==='worker';
   // All transactions for totals/stats (workers see bar-wide numbers, not just their own)
   let allTx=transactions.filter(t=>!t.voided);
@@ -5940,6 +6138,7 @@ function loadSettings(){
   if(document.getElementById('settingReceiptFromEmail'))document.getElementById('settingReceiptFromEmail').value=settings.receiptFromEmail||'';
   if(document.getElementById('settingHelcimCurrency'))document.getElementById('settingHelcimCurrency').value=settings.helcimCurrency||'USD';
   if(document.getElementById('settingHelcimProxy'))document.getElementById('settingHelcimProxy').value=settings.helcimProxy||'';
+  if(document.getElementById('settingPrinterIp'))document.getElementById('settingPrinterIp').value=settings.printerIp||'';
   // Show live vs simulation status
   const statusNote=document.getElementById('helcimStatusNote');
   if(statusNote){
@@ -6029,6 +6228,32 @@ function saveHelcimSettings(){
     }
   }
   showToast('Helcim settings saved','success');
+}
+
+function savePrinterSettings(){
+  settings.printerIp=(document.getElementById('settingPrinterIp')?.value||'').trim();
+  settings._localSavedAt=Date.now();
+  _safeSettingsSave();
+  if(fbDb&&_netOnline){fbDb.ref('settings').set(settings).catch(()=>{});}
+  showToast('Printer settings saved','success');
+}
+
+function testCashDrawer(){
+  const resultEl=document.getElementById('printerTestResult');
+  const ip=(settings.printerIp||'').trim();
+  if(!ip){
+    if(resultEl)resultEl.innerHTML='<span style="color:var(--red)">❌ Enter a printer IP address first</span>';
+    return;
+  }
+  if(resultEl)resultEl.innerHTML='<span style="color:var(--text2)">⏳ Sending drawer kick…</span>';
+  // Temporarily set lastPayMethod to cash so _kickCashDrawer fires
+  const prev=lastPayMethod;lastPayMethod='Cash';
+  _kickCashDrawer();
+  lastPayMethod=prev;
+  // Give it 1 second then show result
+  setTimeout(()=>{
+    if(resultEl)resultEl.innerHTML='<span style="color:var(--green)">✅ Kick signal sent to '+ip+' — did the drawer open?</span>';
+  },1000);
 }
 
 // ===================== PERSISTENCE =====================
@@ -6292,17 +6517,20 @@ function _renderOfflineBanner(){
   if(!_netOnline || pending > 0){
     banner.classList.add('show');
     if(!_netOnline){
-      if(dot) dot.style.background = 'var(--red)';
-      textEl.textContent = pending > 0
-        ? `📵 Offline — ${pending} data type${pending > 1 ? 's' : ''} waiting to sync`
-        : '📵 Offline — data saved locally';
+      banner.classList.add('offline-hard');
+      if(dot) dot.style.background = '#fff';
+      textEl.innerHTML = pending > 0
+        ? `📵 <strong>NO INTERNET</strong> — ${pending} change${pending > 1 ? 's' : ''} queued · <span style="color:#fca5a5">⚠️ Card payments will fail</span>`
+        : `📵 <strong>NO INTERNET</strong> — Transactions saved locally · <span style="color:#fca5a5">⚠️ Card payments will fail</span>`;
     } else {
+      banner.classList.remove('offline-hard');
       if(dot) dot.style.background = 'var(--accent)';
       textEl.textContent = `⏳ Syncing ${pending} pending change${pending > 1 ? 's' : ''}…`;
     }
     if(countEl) countEl.textContent = pending > 0 ? `${pending} queued` : '';
   } else {
     banner.classList.remove('show');
+    banner.classList.remove('offline-hard');
     if(countEl) countEl.textContent = '';
   }
 }
@@ -7233,23 +7461,26 @@ function setReportView(v){
 // ===================== REPORTS PERIOD =====================
 function setReportPeriod(p){
   _reportPeriod=p;
-  ['today','week','all','custom','audit','disputes'].forEach(id=>{
+  ['today','week','all','custom','audit','disputes','shift'].forEach(id=>{
     const el=document.getElementById('rt'+id.charAt(0).toUpperCase()+id.slice(1));
     if(el)el.classList.toggle('active',id===p);
   });
   const isDisputes=p==='disputes';
   const isAudit=p==='audit';
+  const isShift=p==='shift';
   const isCustom=p==='custom';
   const mainSec=document.getElementById('reportsMainSection');
   const dispSec=document.getElementById('disputesSection');
   const auditSec=document.getElementById('auditSection');
+  const shiftSec=document.getElementById('shiftSection');
   const customRow=document.getElementById('customRangeRow');
   const goalBar=document.getElementById('salesGoalBar');
-  if(mainSec)mainSec.style.display=(isDisputes||isAudit)?'none':'';
+  if(mainSec)mainSec.style.display=(isDisputes||isAudit||isShift)?'none':'';
   if(dispSec)dispSec.style.display=isDisputes?'':'none';
   if(auditSec)auditSec.style.display=isAudit?'':'none';
+  if(shiftSec)shiftSec.style.display=isShift?'':'none';
   if(customRow)customRow.style.display=isCustom?'flex':'none';
-  if(goalBar)goalBar.style.display=(isDisputes||isAudit||isCustom)?'none':'';
+  if(goalBar)goalBar.style.display=(isDisputes||isAudit||isCustom||isShift)?'none':'';
   if(isCustom){
     const today=new Date().toISOString().split('T')[0];
     const fromEl=document.getElementById('reportDateFrom');
@@ -7262,24 +7493,118 @@ function setReportPeriod(p){
 function applyCustomRange(){renderReports();}
 
 // ===================== CSV EXPORT =====================
-function exportCSV(){
-  const rows=[['Date','Time','Receipt#','Tab','Employee','Method','Items','Subtotal','Tax','Tip','Total','Voided','Discount']];
-  const sorted=[...transactions].sort((a,b)=>new Date(a.timestamp)-new Date(b.timestamp));
+function renderShiftReport(){
+  const el=document.getElementById('shiftBody');
+  if(!el)return;
+  const todayStr=new Date().toDateString();
+  const todayTx=transactions.filter(t=>!t.voided&&new Date(t.timestamp).toDateString()===todayStr);
+
+  // Group by employee
+  const byEmp={};
+  todayTx.forEach(tx=>{
+    const id=tx.employeeId||'unknown';
+    if(!byEmp[id])byEmp[id]={emp:employees.find(e=>e.id===id)||{name:'Unknown'},txCount:0,sales:0,tips:0,cash:0,card:0,comps:0};
+    const b=byEmp[id];
+    b.txCount++;
+    b.sales+=tx.subtotal||0;
+    b.tips+=(tx.tip||0)+(tx.autoGrat||0);
+    b.comps+=tx.compTotal||0;
+    if((tx.method||'').toLowerCase()==='cash')b.cash+=tx.total||0;
+    else b.card+=tx.total||0;
+  });
+
+  const rows=Object.values(byEmp).sort((a,b)=>b.sales-a.sales);
+  if(rows.length===0){el.innerHTML='<div style="padding:20px;text-align:center;color:var(--text2);">No transactions today yet.</div>';return;}
+
+  const totalSales=rows.reduce((s,r)=>s+r.sales,0);
+  const totalTips=rows.reduce((s,r)=>s+r.tips,0);
+  const totalTx=rows.reduce((s,r)=>s+r.txCount,0);
+
+  const rowsHtml=rows.map(r=>`
+    <tr style="border-bottom:1px solid var(--border);">
+      <td style="padding:10px 8px;font-weight:700;">${r.emp.name||'Unknown'}</td>
+      <td style="padding:10px 8px;text-align:center;color:var(--text2);">${r.txCount}</td>
+      <td style="padding:10px 8px;text-align:right;color:var(--accent);font-weight:700;">$${r.sales.toFixed(2)}</td>
+      <td style="padding:10px 8px;text-align:right;color:var(--green);font-weight:700;">$${r.tips.toFixed(2)}</td>
+      <td style="padding:10px 8px;text-align:right;">$${r.cash.toFixed(2)}</td>
+      <td style="padding:10px 8px;text-align:right;">$${r.card.toFixed(2)}</td>
+      ${r.comps>0?`<td style="padding:10px 8px;text-align:right;color:var(--red);">$${r.comps.toFixed(2)}</td>`:'<td></td>'}
+    </tr>`).join('');
+
+  el.innerHTML=`
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+      <div class="section-title" style="margin:0;">👥 Shift Report — Today</div>
+      <button class="btn btn-sm btn-blue" onclick="printShiftReport()">🖨 Print</button>
+    </div>
+    <div style="display:flex;gap:10px;margin-bottom:16px;flex-wrap:wrap;">
+      <div class="eod-stat" style="flex:1;min-width:100px;"><div class="eod-stat-val">$${totalSales.toFixed(2)}</div><div class="eod-stat-label">Total Sales</div></div>
+      <div class="eod-stat" style="flex:1;min-width:100px;"><div class="eod-stat-val" style="color:var(--green);">$${totalTips.toFixed(2)}</div><div class="eod-stat-label">Total Tips</div></div>
+      <div class="eod-stat" style="flex:1;min-width:100px;"><div class="eod-stat-val">${totalTx}</div><div class="eod-stat-label">Transactions</div></div>
+    </div>
+    <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;">
+      <table style="width:100%;border-collapse:collapse;font-size:.85rem;">
+        <thead>
+          <tr style="background:var(--surface2);font-size:.72rem;color:var(--text2);text-transform:uppercase;letter-spacing:.05em;">
+            <th style="padding:8px;text-align:left;">Employee</th>
+            <th style="padding:8px;text-align:center;">Trans</th>
+            <th style="padding:8px;text-align:right;">Sales</th>
+            <th style="padding:8px;text-align:right;color:var(--green);">Tips</th>
+            <th style="padding:8px;text-align:right;">Cash</th>
+            <th style="padding:8px;text-align:right;">Card</th>
+            <th style="padding:8px;text-align:right;">Comps</th>
+          </tr>
+        </thead>
+        <tbody>${rowsHtml}</tbody>
+      </table>
+    </div>`;
+}
+
+function printShiftReport(){
+  const todayStr=new Date().toDateString();
+  const todayTx=transactions.filter(t=>!t.voided&&new Date(t.timestamp).toDateString()===todayStr);
+  const byEmp={};
+  todayTx.forEach(tx=>{
+    const id=tx.employeeId||'unknown';
+    if(!byEmp[id])byEmp[id]={emp:employees.find(e=>e.id===id)||{name:'Unknown'},txCount:0,sales:0,tips:0,cash:0,card:0};
+    const b=byEmp[id];b.txCount++;b.sales+=tx.subtotal||0;b.tips+=(tx.tip||0)+(tx.autoGrat||0);
+    if((tx.method||'').toLowerCase()==='cash')b.cash+=tx.total||0;else b.card+=tx.total||0;
+  });
+  const rows=Object.values(byEmp).sort((a,b)=>b.sales-a.sales);
+  const dateStr=new Date().toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric',year:'numeric'});
+  const rowsHtml=rows.map(r=>`<tr><td>${r.emp.name}</td><td>${r.txCount}</td><td>$${r.sales.toFixed(2)}</td><td>$${r.tips.toFixed(2)}</td><td>$${r.cash.toFixed(2)}</td><td>$${r.card.toFixed(2)}</td></tr>`).join('');
+  const html=`<div style="font-family:monospace;padding:16px;color:#111;">
+    <h2 style="text-align:center;margin:0 0 4px;">${settings.barName}</h2>
+    <div style="text-align:center;font-size:.8rem;margin-bottom:16px;">${dateStr} — Shift Report</div>
+    <table style="width:100%;border-collapse:collapse;font-size:.82rem;">
+      <thead><tr style="border-bottom:2px solid #333;"><th>Employee</th><th>Trans</th><th>Sales</th><th>Tips</th><th>Cash</th><th>Card</th></tr></thead>
+      <tbody>${rowsHtml}</tbody>
+      <tfoot><tr style="border-top:2px solid #333;font-weight:700;"><td>TOTAL</td><td>${rows.reduce((s,r)=>s+r.txCount,0)}</td><td>$${rows.reduce((s,r)=>s+r.sales,0).toFixed(2)}</td><td>$${rows.reduce((s,r)=>s+r.tips,0).toFixed(2)}</td><td>$${rows.reduce((s,r)=>s+r.cash,0).toFixed(2)}</td><td>$${rows.reduce((s,r)=>s+r.card,0).toFixed(2)}</td></tr></tfoot>
+    </table></div>`;
+  _printInPage(html,'Shift Report');
+}
+
+function exportCSV(todayOnly){
+  const todayStr=new Date().toDateString();
+  let src=todayOnly?transactions.filter(t=>new Date(t.timestamp).toDateString()===todayStr):transactions;
+  const rows=[['Date','Time','Ticket#','Receipt#','Tab','Employee','Method','Items','Subtotal','Tax','Tip','Total','Voided','Helcim TX ID','Discount']];
+  const sorted=[...src].sort((a,b)=>new Date(a.timestamp)-new Date(b.timestamp));
   sorted.forEach(tx=>{
     const d=new Date(tx.timestamp);
     const emp=employees.find(e=>e.id===tx.employeeId);
     const itemsStr=(tx.items||[]).map(i=>`${i.name}x${i.qty}`).join('; ');
     rows.push([
       d.toLocaleDateString(),d.toLocaleTimeString(),
+      tx.ticketNum?_ticketLabel(tx.ticketNum):'',
       String(tx.id).padStart(4,'0'),
       tx.tabName||'Quick Sale',
       emp?emp.name:'Unknown',
-      tx.method,itemsStr,
+      tx.method||'',itemsStr,
       tx.subtotal?.toFixed(2)||'0.00',
       tx.tax?.toFixed(2)||'0.00',
       tx.tip?.toFixed(2)||'0.00',
       tx.total?.toFixed(2)||'0.00',
       tx.voided?'Yes':'No',
+      tx.helcimTransactionId||'',
       tx.discountReason||''
     ]);
   });
@@ -7287,9 +7612,10 @@ function exportCSV(){
   const blob=new Blob([csv],{type:'text/csv'});
   const url=URL.createObjectURL(blob);
   const a=document.createElement('a');
-  a.href=url;a.download=`${settings.barName.replace(/ /g,'_')}_transactions_${new Date().toISOString().split('T')[0]}.csv`;
+  const suffix=todayOnly?`_today_${new Date().toISOString().split('T')[0]}`:`_all_${new Date().toISOString().split('T')[0]}`;
+  a.href=url;a.download=`${settings.barName.replace(/ /g,'_')}_transactions${suffix}.csv`;
   a.click();URL.revokeObjectURL(url);
-  showToast('CSV exported','success');
+  showToast(`CSV exported (${sorted.length} transactions)`,'success');
 }
 
 // ===================== UTILS =====================
@@ -7431,6 +7757,48 @@ function toggle86(id){
   item.eightySixed=!item.eightySixed;
   saveMenu();renderMenuTable();renderMenu();
   showToast(item.eightySixed?`🚫 ${item.name} marked 86'd`:`✅ ${item.name} restored to menu`,'info');
+}
+
+function openQuick86(){
+  showModal('quick86Modal');
+  const s=document.getElementById('q86Search');
+  if(s)s.value='';
+  renderQuick86();
+}
+
+function renderQuick86(){
+  const el=document.getElementById('q86List');
+  if(!el)return;
+  const q=(document.getElementById('q86Search')?.value||'').toLowerCase().trim();
+  const items=menuItems.filter(i=>!q||i.name.toLowerCase().includes(q)||i.cat.toLowerCase().includes(q));
+  if(items.length===0){el.innerHTML='<div style="color:var(--text2);padding:12px;text-align:center;">No items found</div>';return;}
+
+  // Group by category
+  const cats=[...new Set(items.map(i=>i.cat))];
+  el.innerHTML=cats.map(cat=>{
+    const catItems=items.filter(i=>i.cat===cat);
+    const rows=catItems.map(item=>`
+      <div onclick="quickToggle86(${item.id})" style="display:flex;justify-content:space-between;align-items:center;padding:9px 10px;border-bottom:1px solid var(--border);cursor:pointer;border-radius:6px;margin-bottom:2px;background:${item.eightySixed?'rgba(239,68,68,.1)':'var(--surface2)'};transition:background .15s;">
+        <div style="display:flex;align-items:center;gap:8px;">
+          <span style="font-size:1.1rem;">${item.emoji||'🍹'}</span>
+          <div>
+            <div style="font-weight:600;${item.eightySixed?'text-decoration:line-through;opacity:.6;':''}font-size:.88rem;">${item.name}</div>
+            <div style="font-size:.7rem;color:var(--text2);">$${item.price.toFixed(2)}</div>
+          </div>
+        </div>
+        <div style="font-size:.75rem;font-weight:700;padding:4px 10px;border-radius:20px;background:${item.eightySixed?'var(--red)':'var(--green)'};color:#fff;">
+          ${item.eightySixed?'86\'d':'✓ Avail'}
+        </div>
+      </div>`).join('');
+    return`<div style="font-size:.68rem;font-weight:700;color:var(--text2);text-transform:uppercase;letter-spacing:.08em;padding:8px 4px 4px;">${cat}</div>${rows}`;
+  }).join('');
+}
+
+function quickToggle86(id){
+  const item=menuItems.find(i=>i.id===id);if(!item)return;
+  item.eightySixed=!item.eightySixed;
+  saveMenu();renderMenu();renderQuick86();
+  showToast(item.eightySixed?`🚫 ${item.name} — 86'd, syncing…`:`✅ ${item.name} — back on menu, syncing…`,'info');
 }
 
 // ===================== CLOSED TABS =====================
@@ -9793,6 +10161,140 @@ function _checkStorageQuota(){
 }
 setTimeout(_checkStorageQuota,15000);
 setInterval(_checkStorageQuota,15*60*1000);
+
+// ===================== CUSTOMER DISPLAY =====================
+(function(){
+  // BroadcastChannel for cross-tab communication
+  let _cdChannel = null;
+  try { _cdChannel = new BroadcastChannel('pos_customer_display'); } catch(e){}
+
+  const _isCustomerDisplay = new URLSearchParams(location.search).get('display') === 'customer';
+
+  // ── SENDER (POS side) ──────────────────────────────────────
+  window._cdSend = function(msg){
+    if(_isCustomerDisplay) return; // don't send from display tab
+    try { if(_cdChannel) _cdChannel.postMessage(msg); } catch(e){}
+    // localStorage fallback for same-origin cross-tab
+    try { localStorage.setItem('_cd_msg', JSON.stringify({...msg, _ts: Date.now()})); } catch(e){}
+  };
+
+  window._openCustomerDisplay = function(){
+    window.open(location.pathname + '?display=customer', '_blank', 'noopener');
+  };
+
+  // ── RECEIVER (Customer Display tab) ───────────────────────
+  if(!_isCustomerDisplay) return;
+
+  // Hide entire POS UI, show customer display
+  document.addEventListener('DOMContentLoaded', function(){
+    // Show customer display, hide everything else
+    const cd = document.getElementById('customerDisplay');
+    if(cd) cd.classList.add('cd-active');
+
+    // Update bar name
+    const cdBarName = document.getElementById('cdBarName');
+    if(cdBarName) cdBarName.textContent = '🍺 ' + (settings.barName || 'The Local');
+
+    // Clock
+    function _cdTick(){
+      const el = document.getElementById('cdClock');
+      if(el) el.textContent = new Date().toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'});
+    }
+    _cdTick();
+    setInterval(_cdTick, 1000);
+
+    // Footer
+    const footerEl = document.getElementById('cdFooterMsg');
+    if(footerEl) footerEl.textContent = settings.receiptFooter || 'Thank you! Drink responsibly 🍺';
+
+    // Idle state
+    const idleMsg = document.getElementById('cdIdleMsg');
+    if(idleMsg) idleMsg.textContent = 'Welcome to ' + (settings.barName || 'The Local') + '!';
+
+    function _cdRender(msg){
+      const main = document.getElementById('cdMain');
+      if(!main) return;
+
+      if(msg.type === 'idle'){
+        main.innerHTML = `<div class="cd-idle">
+          <div class="cd-idle-emoji">🍺</div>
+          <div class="cd-idle-msg">Welcome to ${settings.barName||'The Local'}!</div>
+          <div class="cd-idle-sub">Your order will appear here</div>
+        </div>`;
+
+      } else if(msg.type === 'order'){
+        const items = msg.items || [];
+        if(items.length === 0){ _cdRender({type:'idle'}); return; }
+        const itemsHtml = items.map(i=>`<tr>
+          <td class="cd-item-qty">${i.qty}×</td>
+          <td class="cd-item-name">${i.emoji||''} ${i.name}</td>
+          <td class="cd-item-price">$${((i.price+(i.modTotal||0))*i.qty).toFixed(2)}</td>
+        </tr>`).join('');
+        const hhHtml = msg.hhDiscount>0 ? `<div class="cd-total-row"><span>🍺 Happy Hour</span><span style="color:var(--green)">−$${msg.hhDiscount.toFixed(2)}</span></div>` : '';
+        main.innerHTML = `<div class="cd-order-wrap">
+          <div class="cd-order-title">Your Order</div>
+          <table class="cd-items">${itemsHtml}</table>
+          <div class="cd-totals">
+            <div class="cd-total-row"><span>Subtotal</span><span>$${msg.subtotal.toFixed(2)}</span></div>
+            ${hhHtml}
+            <div class="cd-total-row"><span>Tax</span><span>$${msg.tax.toFixed(2)}</span></div>
+            <div class="cd-total-row cd-grand"><span>Total</span><span>$${msg.total.toFixed(2)}</span></div>
+          </div>
+        </div>`;
+
+      } else if(msg.type === 'processing'){
+        main.innerHTML = `<div class="cd-processing">
+          <div class="cd-processing-icon">💳</div>
+          <div class="cd-processing-msg">Processing Payment…</div>
+          <div class="cd-processing-amt">$${(msg.total||0).toFixed(2)}</div>
+          <div class="cd-processing-sub">Please follow prompts on card reader</div>
+        </div>`;
+
+      } else if(msg.type === 'approved'){
+        main.innerHTML = `<div class="cd-approved">
+          <div class="cd-approved-icon">✅</div>
+          <div class="cd-approved-msg">Payment Approved!</div>
+          <div class="cd-approved-amt">$${(msg.total||0).toFixed(2)}</div>
+        </div>`;
+        setTimeout(()=>_cdRender({type:'idle'}), 5000);
+      }
+    }
+
+    // Listen for messages
+    if(_cdChannel) _cdChannel.onmessage = e => _cdRender(e.data);
+
+    // localStorage fallback polling
+    let _cdLastTs = 0;
+    setInterval(()=>{
+      try{
+        const raw = localStorage.getItem('_cd_msg');
+        if(raw){
+          const m = JSON.parse(raw);
+          if(m._ts > _cdLastTs){ _cdLastTs = m._ts; _cdRender(m); }
+        }
+      }catch(e){}
+    }, 300);
+  });
+})();
+
+// ── Hook renderOrder to broadcast order updates ────────────────────────────
+const _origRenderOrder = renderOrder;
+window.renderOrder = function(){
+  _origRenderOrder.apply(this, arguments);
+  try{
+    const t = getOrderTotal();
+    window._cdSend({
+      type: 'order',
+      items: currentOrder.map(i=>({...i})),
+      subtotal: t.subtotal,
+      tax: t.tax,
+      tip: t.tip,
+      total: t.total,
+      hhDiscount: t.hhDiscount||0
+    });
+  }catch(e){}
+};
+// ===================== END CUSTOMER DISPLAY =====================
 </script>
 </body>
 </html>
