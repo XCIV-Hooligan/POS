@@ -1217,9 +1217,9 @@ input:checked+.toggle-track::after{left:23px;}
       <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:18px;margin-top:12px;">
         <div class="section-label" style="margin-bottom:10px;">📨 SMS &amp; Email Receipts</div>
         <div class="helcim-note" style="margin-bottom:12px;font-size:.72rem;">
-          Connect <strong>Twilio</strong> for SMS receipts and <strong>SendGrid</strong> for email receipts. Both offer free tiers for low volume.<br><br>
+          Connect <strong>Twilio</strong> for SMS receipts and <strong>Resend</strong> for email receipts. Resend is free for up to 3,000 emails/month permanently.<br><br>
           • Twilio: <strong>twilio.com</strong> → Account SID + Auth Token + a purchased phone number<br>
-          • SendGrid: <strong>sendgrid.com</strong> → Settings → API Keys → Full Access key<br><br>
+          • Resend: <strong>resend.com</strong> → API Keys → Create API Key → Full Access<br><br>
           ⚠️ These API calls also require a CORS proxy (same as Helcim above) or a small backend server.
         </div>
         <div class="form-row">
@@ -1228,7 +1228,7 @@ input:checked+.toggle-track::after{left:23px;}
         </div>
         <div class="form-group"><label class="form-label">Twilio From Number</label><input class="form-input" id="settingTwilioFrom" placeholder="+15551234567" type="tel"></div>
         <div class="form-row">
-          <div class="form-group"><label class="form-label">SendGrid API Key</label><input class="form-input" id="settingSendgridKey" type="password" placeholder="SG.xxxxxxxx"></div>
+          <div class="form-group"><label class="form-label">Resend API Key</label><input class="form-input" id="settingSendgridKey" type="password" placeholder="re_xxxxxxxx"></div>
           <div class="form-group"><label class="form-label">From Email Address</label><input class="form-input" id="settingReceiptFromEmail" placeholder="receipts@yourbar.com" type="email"></div>
         </div>
         <button class="btn btn-md btn-blue" onclick="saveMessagingSettings()">Save Messaging Settings</button>
@@ -7923,10 +7923,10 @@ function openSendReceiptModal(){
   if(noteEl){
     const hasSMS=!!(settings.twilioSid&&settings.twilioToken&&settings.twilioFrom);
     const hasEmail=!!(settings.sendgridKey&&settings.receiptFromEmail);
-    if(hasSMS&&hasEmail) noteEl.innerHTML='✅ <strong style="color:var(--green)">SMS + Email live</strong> — messages will be sent via Twilio &amp; SendGrid.';
-    else if(hasSMS)       noteEl.innerHTML='✅ <strong style="color:var(--green)">SMS live</strong> · ⚠️ Email not configured (set SendGrid key in Settings).';
+    if(hasSMS&&hasEmail) noteEl.innerHTML='✅ <strong style="color:var(--green)">SMS + Email live</strong> — messages will be sent via Twilio &amp; Resend.';
+    else if(hasSMS)       noteEl.innerHTML='✅ <strong style="color:var(--green)">SMS live</strong> · ⚠️ Email not configured (set Resend key in Settings).';
     else if(hasEmail)     noteEl.innerHTML='✅ <strong style="color:var(--green)">Email live</strong> · ⚠️ SMS not configured (set Twilio credentials in Settings).';
-    else                  noteEl.innerHTML='⚠️ <strong>Simulation mode</strong> — no messages sent. Add Twilio/SendGrid credentials in Settings → SMS &amp; Email Receipts.';
+    else                  noteEl.innerHTML='⚠️ <strong>Simulation mode</strong> — no messages sent. Add Twilio/Resend credentials in Settings → SMS &amp; Email Receipts.';
   }
   showModal('sendReceiptModal');
 }
@@ -7967,23 +7967,23 @@ function sendReceipt(){
   if(email){
     if(hasEmail){
       const proxy=(settings.helcimProxy||'').replace(/\/$/,'');
-      const sgBase=proxy||'https://api.sendgrid.com';
+      const rsBase=proxy||'https://api.resend.com';
       promises.push(
-        fetch(`${sgBase}/v3/mail/send`,{
+        fetch(`${rsBase}/emails`,{
           method:'POST',
           headers:{'Authorization':'Bearer '+settings.sendgridKey,'Content-Type':'application/json'},
           body:JSON.stringify({
-            personalizations:[{to:[{email}]}],
-            from:{email:settings.receiptFromEmail,name:settings.barName||'Bar POS'},
+            to:[email],
+            from:`${settings.barName||'Bar POS'} <${settings.receiptFromEmail}>`,
             subject:`Your receipt from ${settings.barName||'Bar POS'}`,
-            content:[{type:'text/html',value:receiptHtml}]
+            html:receiptHtml
           })
         })
-        .then(r=>r.ok||r.status===202?{ok:true,type:'Email'}:r.json().then(e=>{throw new Error(JSON.stringify(e.errors||e));}))
+        .then(r=>r.ok||r.status===200?{ok:true,type:'Email'}:r.json().then(e=>{throw new Error(JSON.stringify(e.message||e));}))
         .catch(e=>({ok:false,type:'Email',error:e.message}))
       );
     } else {
-      promises.push(Promise.resolve({ok:false,type:'Email',error:'SendGrid not configured'}));
+      promises.push(Promise.resolve({ok:false,type:'Email',error:'Resend not configured'}));
     }
   }
 
@@ -8009,7 +8009,7 @@ function sendReceipt(){
     // Simulation fallback if nothing configured
     if(!hasSMS&&!hasEmail){
       msgEl.style.color='var(--text2)';
-      msgEl.textContent='⚠️ Simulation — add Twilio/SendGrid credentials in Settings to send real messages.';
+      msgEl.textContent='⚠️ Simulation — add Twilio/Resend credentials in Settings to send real messages.';
     }
   });
 }
