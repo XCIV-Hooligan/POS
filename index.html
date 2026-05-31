@@ -1997,7 +1997,7 @@ let menuItems = _safeParse('pos2_menu', null) || [
    ]},
 ];
 
-let tabs = _safeParse('pos2_tabs', []);
+let tabs = _safeParse('pos2_tabs', []).map(t=>({...t, items: Array.isArray(t.items)?t.items:[]}));
 let transactions = _safeParse('pos2_transactions', []);
 
 let dailySpecials = _safeParse('pos2_specials', []);
@@ -3081,6 +3081,7 @@ function renderTabs(){
     badge.textContent=visibleTabs.length;badge.style.display='';
     list.innerHTML='';
     visibleTabs.forEach(tab=>{
+      if(!tab.items) tab.items = [];
       const tabTotal=tab.items.reduce((s,i)=>s+(i.price+(i.modTotal||0))*i.qty,0);
       const emp=employees.find(e=>e.id===tab.employeeId);
       const itemCount=tab.items.reduce((s,i)=>s+i.qty,0);
@@ -4497,7 +4498,7 @@ function _processPaymentInner(){
 
         <div style="font-size:.78rem;color:var(--text2);margin-top:6px">${method} · ${new Date().toLocaleTimeString()} · ${currentUser.name}</div>
         <div style="font-size:.82rem;font-weight:700;color:var(--accent);margin-top:4px;letter-spacing:.04em;">TX #${String(tx.id).padStart(4,'0')}</div>
-        ${!isCash?`<button class="btn btn-md btn-accent" style="width:100%;margin-top:12px;font-weight:700;" onclick="openPostTipModal(${tx.id})">💰 Add / Adjust Tip</button>`:''}
+
         <button class="btn btn-lg btn-blue" style="width:100%;margin-top:8px;font-size:1rem;" onclick="finishPayment(true)">🖨 Print Receipt</button>
         <button class="btn btn-md btn-ghost" style="width:100%;margin-top:6px;" onclick="finishPayment(false)">Skip — Done</button>
       </div>`;
@@ -6112,7 +6113,7 @@ async function _mergeServerState(){
 function setupFirebaseListeners(){
   fbDb.ref('tabs').on('value',snap=>{
     const d=snap.val();
-    if(d!==null){tabs=Object.values(d);nextTabId=Math.max(...tabs.map(t=>t.id),0)+1;if(currentUser)renderTabs();}
+    if(d!==null){tabs=Object.values(d).map(t=>({...t,items:Array.isArray(t.items)?t.items:[]}));nextTabId=Math.max(...tabs.map(t=>t.id),0)+1;if(currentUser)renderTabs();}
   });
   fbDb.ref('transactions').on('value',snap=>{
     const d=snap.val();
@@ -8971,7 +8972,9 @@ async function _acquireWakeLock(){
     });
     if(typeof _log==='function') _log('info','WakeLock','Screen wake lock acquired','Screen will stay on during shift');
   } catch(e){
-    if(typeof _log==='function') _log('warn','WakeLock','Could not acquire wake lock',e.message);
+    // Only log if this isn't a normal permission denial (e.g. HTTP vs HTTPS) — avoids noise in dev
+    const isSecure = location.protocol === 'https:' || location.hostname === 'localhost';
+    if(isSecure && typeof _log==='function') _log('warn','WakeLock','Could not acquire wake lock',e.message);
   }
 }
 
